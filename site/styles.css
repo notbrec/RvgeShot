@@ -419,6 +419,28 @@ kbd {
     inset 0 0 0 1px rgba(255, 255, 255, 0.1);
   animation: float 7s var(--ease) infinite;
 }
+/* svjetlosni odsjaj koji povremeno prijeđe preko stakla */
+.shot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.07) 47%,
+    rgba(255, 255, 255, 0.13) 50%,
+    rgba(255, 255, 255, 0.07) 53%,
+    transparent 62%
+  );
+  background-size: 280% 100%;
+  animation: sheen 8s ease-in-out infinite;
+}
+@keyframes sheen {
+  0%, 55% { background-position: 140% 0; }
+  78%, 100% { background-position: -40% 0; }
+}
 .shot__wall {
   position: absolute;
   inset: 0;
@@ -467,6 +489,40 @@ kbd {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
   -webkit-backdrop-filter: brightness(1.18) saturate(1.1);
   backdrop-filter: brightness(1.18) saturate(1.1);
+  transform-origin: top left;
+  animation: selGrow 8s var(--ease) infinite;
+}
+/* selekcija se "razvuče" iz gornjeg-lijevog kuta */
+@keyframes selGrow {
+  0%, 6% { transform: scale(0.015); opacity: 0; }
+  11% { opacity: 1; }
+  38%, 86% { transform: scale(1); opacity: 1; }
+  93%, 100% { transform: scale(0.015); opacity: 0; }
+}
+/* animirani kursor koji povlači selekciju */
+.shot__cursor {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  top: 18%;
+  left: 16%;
+  z-index: 6;
+  opacity: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  animation: cursorMove 8s var(--ease) infinite;
+}
+.shot__cursor svg {
+  width: 100%;
+  height: 100%;
+}
+@keyframes cursorMove {
+  0%, 3% { top: 12%; left: 11%; opacity: 0; }
+  8% { top: 18%; left: 16%; opacity: 1; }
+  38% { top: 70%; left: 84%; opacity: 1; }
+  45% { top: 76%; left: 62%; opacity: 1; }
+  86% { top: 78%; left: 60%; opacity: 1; }
+  92%, 100% { opacity: 0; }
 }
 .shot__dimchip {
   position: absolute;
@@ -479,6 +535,13 @@ kbd {
   border-radius: 999px;
   background: rgba(20, 20, 22, 0.85);
   box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18);
+  animation: chipFade 8s var(--ease) infinite;
+}
+/* chip skriven dok okvir raste, pa se pojavi */
+@keyframes chipFade {
+  0%, 30% { opacity: 0; }
+  40%, 86% { opacity: 1; }
+  92%, 100% { opacity: 0; }
 }
 .handle {
   position: absolute;
@@ -514,6 +577,22 @@ kbd {
   display: flex;
   gap: 8px;
   z-index: 3;
+  animation: barIn 8s var(--ease) infinite;
+}
+/* toolbar iskoči tek kad je regija odabrana */
+@keyframes barIn {
+  0%, 40% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(14px) scale(0.95);
+  }
+  49%, 86% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  92%, 100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(14px) scale(0.95);
+  }
 }
 .bar__group {
   display: flex;
@@ -1139,13 +1218,15 @@ kbd {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
-    animation: none !important;
-    scroll-behavior: auto !important;
+  /* Vlasnik izričito želi animirani, premium feel → zadržavamo dekorativne
+     ambijentalne animacije (aurora, shimmer, capture, sheen). Uklanjamo samo
+     scroll-reveal pomak, koji najviše smeta osjetljivima na pokret. */
+  html {
+    scroll-behavior: auto;
   }
   .reveal {
-    opacity: 1;
-    transform: none;
-    transition: none;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
   }
 }
