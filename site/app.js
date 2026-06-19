@@ -2,19 +2,13 @@
    RvgeShot landing — interaktivnost
 
    ▼ DOWNLOAD LINKOVI ▼
-   Linkovi već pokazuju na tvoj GitHub Releases (notbrec/RvgeShot).
-   "latest" uvijek vodi na NAJNOVIJI release — ne trebaš ih mijenjati
-   po verzijama; samo imenuj uploadane datoteke točno kao dolje
-   (RvgeShot-Setup.msi i RvgeShot.dmg).
-
-   RELEASE_READY: dok je false, gumbi pokažu „coming soon" (bez 404).
-   Kad objaviš prvi GitHub Release → prebaci na true.
+   Prazan string ("") => gumb pokaže „coming soon".
+   Windows je objavljen i radi odmah. macOS dolazi kad se build potvrdi —
+   tad vrati .dmg link: ".../releases/latest/download/RvgeShot.dmg".
    ───────────────────────────────────────────────────────────── */
-const RELEASE_READY = false;
-
 const DOWNLOADS = {
   windows: "https://github.com/notbrec/RvgeShot/releases/latest/download/RvgeShot-Setup.msi",
-  mac: "https://github.com/notbrec/RvgeShot/releases/latest/download/RvgeShot.dmg",
+  mac: "", // coming soon
 };
 
 const OS_LABEL = { windows: "Windows", mac: "macOS" };
@@ -35,7 +29,7 @@ function wireDownloads() {
 
   document.querySelectorAll("[data-os]").forEach((el) => {
     const target = el.dataset.os;
-    const url = RELEASE_READY ? DOWNLOADS[target] : "";
+    const url = DOWNLOADS[target] || "";
 
     if (url) {
       el.setAttribute("href", url);
@@ -115,11 +109,32 @@ function wireNav() {
   window.addEventListener("scroll", onScroll, { passive: true });
 }
 
+/* ── mobilni "Soon" gumbi ────────────────────────────────────── */
+function wireMobile() {
+  const hint = document.getElementById("os-hint");
+  const say = () => {
+    if (hint) {
+      hint.textContent = "iOS & Android are in the works — desktop is ready now. 📱";
+      hint.style.color = "rgb(90 170 255)";
+    }
+  };
+  document.querySelectorAll(".store[data-soon]").forEach((el) => {
+    el.addEventListener("click", say);
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        say();
+      }
+    });
+  });
+}
+
 /* ── init ────────────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
   wireDownloads();
   wireReveal();
   wireNav();
+  wireMobile();
   const y = document.getElementById("year");
   if (y) y.textContent = new Date().getFullYear();
 });

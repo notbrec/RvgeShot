@@ -16,8 +16,10 @@
   --cyan: 90 200 250;
 
   --maxw: 1140px;
-  --radius: 22px;
+  --radius: 12px; /* kartice/glass — manje zaobljeno, oštriji premium izgled */
+  --radius-lg: 16px; /* veće plohe (CTA) */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   color-scheme: dark;
 }
@@ -86,12 +88,19 @@ kbd {
   background: linear-gradient(
     100deg,
     rgb(var(--cyan)),
-    rgb(var(--accent)) 45%,
-    rgb(var(--violet))
+    rgb(var(--accent)) 35%,
+    rgb(var(--violet)) 65%,
+    rgb(var(--cyan))
   );
+  background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+  animation: shimmer 6s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0%, 100% { background-position: 0% 0; }
+  50% { background-position: 100% 0; }
 }
 
 /* ── pozadina ──────────────────────────────────────────────── */
@@ -119,20 +128,21 @@ kbd {
     transparent 60%
   );
 }
-/* aurora glow — tri mekana sloja za dubinu */
+/* aurora glow — tri mekana sloja koja se polako gibaju (živa pozadina) */
 .bg-glow {
   position: absolute;
   border-radius: 50%;
   filter: blur(100px);
+  will-change: transform;
 }
 .bg-glow--1 {
   top: -220px;
   left: 50%;
   width: 780px;
   height: 560px;
-  transform: translateX(-50%);
   background: radial-gradient(circle, rgba(10, 132, 255, 0.5), transparent 62%);
   opacity: 0.55;
+  animation: drift1 22s ease-in-out infinite;
 }
 .bg-glow--2 {
   top: 160px;
@@ -141,6 +151,7 @@ kbd {
   height: 560px;
   background: radial-gradient(circle, rgba(122, 91, 255, 0.42), transparent 64%);
   opacity: 0.5;
+  animation: drift2 27s ease-in-out infinite;
 }
 .bg-glow--3 {
   top: 40px;
@@ -149,6 +160,19 @@ kbd {
   height: 520px;
   background: radial-gradient(circle, rgba(90, 200, 250, 0.26), transparent 66%);
   opacity: 0.5;
+  animation: drift3 31s ease-in-out infinite;
+}
+@keyframes drift1 {
+  0%, 100% { transform: translate(-50%, 0) scale(1); }
+  50% { transform: translate(-44%, 36px) scale(1.08); }
+}
+@keyframes drift2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-46px, 30px) scale(1.1); }
+}
+@keyframes drift3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40px, -28px) scale(1.06); }
 }
 /* fini filmski grain — sakriva banding u gradijentima, daje "skup" dojam */
 .bg::after {
@@ -350,7 +374,12 @@ kbd {
   height: 8px;
   border-radius: 50%;
   background: rgb(48 209 88);
-  box-shadow: 0 0 0 4px rgba(48, 209, 88, 0.2);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(48, 209, 88, 0.5); }
+  70% { box-shadow: 0 0 0 7px rgba(48, 209, 88, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(48, 209, 88, 0); }
 }
 .hero__title {
   font-size: clamp(40px, 6.2vw, 70px);
@@ -554,6 +583,11 @@ kbd {
     transparent 70%
   );
   filter: blur(50px);
+  animation: glowPulse 5s ease-in-out infinite;
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
 }
 
 /* ── trust traka ───────────────────────────────────────────── */
@@ -620,27 +654,34 @@ kbd {
     ),
     rgba(30, 30, 34, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.07);
-  transition: transform 0.3s var(--ease), border-color 0.3s, background 0.3s;
+  transition: transform 0.35s var(--ease), border-color 0.35s, background 0.35s,
+    box-shadow 0.35s var(--ease);
 }
 .card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(10, 132, 255, 0.35);
+  transform: translateY(-6px);
+  border-color: rgba(10, 132, 255, 0.45);
   background: linear-gradient(
       180deg,
       rgba(255, 255, 255, 0.07),
       rgba(255, 255, 255, 0.02) 45%
     ),
     rgba(34, 34, 40, 0.6);
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(10, 132, 255, 0.12),
+    0 -1px 30px rgba(10, 132, 255, 0.12) inset;
 }
 .card__icon {
   display: grid;
   place-items: center;
   width: 50px;
   height: 50px;
-  border-radius: 14px;
+  border-radius: 10px;
   margin-bottom: 20px;
   background: linear-gradient(180deg, rgba(10, 132, 255, 0.28), rgba(122, 91, 255, 0.22));
   border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: transform 0.4s var(--ease-spring);
+}
+.card:hover .card__icon {
+  transform: translateY(-2px) scale(1.08) rotate(-3deg);
 }
 .card__icon svg {
   width: 24px;
@@ -726,7 +767,7 @@ kbd {
   position: relative;
   text-align: center;
   padding: clamp(48px, 7vw, 84px) 24px;
-  border-radius: 30px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: linear-gradient(
       180deg,
@@ -826,6 +867,85 @@ kbd {
   color: rgb(var(--muted));
 }
 
+/* ── store gumbi (mobilne platforme — coming soon) ─────────── */
+.stores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+.stores--center {
+  justify-content: center;
+}
+.store {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgb(var(--text));
+  cursor: pointer;
+  transition: transform 0.2s var(--ease), background 0.2s, border-color 0.2s;
+}
+.store:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.store svg {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.store span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.12;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.store span small {
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.65;
+  letter-spacing: 0.01em;
+}
+.store__soon {
+  font-size: 9.5px;
+  font-weight: 700;
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: rgb(255 159 10);
+  background: rgba(255, 159, 10, 0.14);
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+/* „Soon" oznaka na macOS gumbu */
+.btn--soon {
+  position: relative;
+}
+.soon-tag {
+  position: absolute;
+  top: -9px;
+  right: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: rgb(255 159 10);
+  background: rgb(40 32 18);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px rgba(255, 159, 10, 0.4);
+}
+
 /* ── FAQ ───────────────────────────────────────────────────── */
 .faq {
   max-width: 780px;
@@ -848,6 +968,9 @@ kbd {
 }
 .faq__item summary::-webkit-details-marker {
   display: none;
+}
+.faq__item summary::marker {
+  content: "";
 }
 .faq__item summary::after {
   content: "+";
@@ -895,6 +1018,34 @@ kbd {
   opacity: 1;
   transform: none;
 }
+/* kaskadni ulaz kartica u gridu */
+.grid .reveal:nth-child(2) {
+  transition-delay: 0.08s;
+}
+.grid .reveal:nth-child(3) {
+  transition-delay: 0.16s;
+}
+.grid .reveal:nth-child(4) {
+  transition-delay: 0.24s;
+}
+
+/* micro-interakcije */
+.trust li {
+  transition: color 0.25s var(--ease);
+}
+.compare__row:not(.compare__row--head) {
+  transition: background 0.25s var(--ease);
+}
+.compare__row:not(.compare__row--head):hover {
+  background: rgba(10, 132, 255, 0.06);
+}
+.eyebrow {
+  transition: border-color 0.3s var(--ease), background 0.3s var(--ease);
+}
+.eyebrow:hover {
+  border-color: rgba(10, 132, 255, 0.4);
+  background: rgba(10, 132, 255, 0.07);
+}
 
 @keyframes float {
   0%,
@@ -924,6 +1075,17 @@ kbd {
     max-width: 520px;
     margin-inline: auto;
     width: 100%;
+  }
+  .mobile {
+    grid-template-columns: 1fr;
+    gap: 36px;
+    text-align: center;
+  }
+  .mobile__copy > p {
+    margin-inline: auto;
+  }
+  .stores {
+    justify-content: center;
   }
   .footer__inner {
     grid-template-columns: 1fr;
