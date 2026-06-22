@@ -213,7 +213,7 @@ export default function Settings() {
 
         {tab === "about" && (
           <Section title="About">
-            <p className="text-sm text-muted">RvgeShot · version 0.1.2</p>
+            <p className="text-sm text-muted">RvgeShot · version 0.1.3</p>
             <p className="mt-2 text-sm text-muted">Fast, private screenshot tool. Privacy built in, not bolted on.</p>
           </Section>
         )}
@@ -249,11 +249,11 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       onClick={() => onChange(!checked)}
       role="switch"
       aria-checked={checked}
-      className={`relative h-6 w-11 rounded-full transition-colors duration-200 ${checked ? "bg-accent" : "bg-border"}`}
+      className={`inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ${checked ? "bg-accent" : "bg-border"}`}
     >
       <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
-          checked ? "translate-x-5" : "translate-x-0.5"
+        className={`inline-block h-5 w-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-transform duration-200 ${
+          checked ? "translate-x-[1.375rem]" : "translate-x-0.5"
         }`}
       />
     </button>
