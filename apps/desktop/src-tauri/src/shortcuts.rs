@@ -1,6 +1,6 @@
 //! Globalni hotkeys (registracija + rebind).
 
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 /// Preferirani hotkeyi za capture regije, redom. PrintScreen često zauzme Windows

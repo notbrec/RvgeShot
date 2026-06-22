@@ -79,6 +79,17 @@ pub fn run() {
             commands::show_home,
             shortcuts::update_hotkey,
         ])
+        // ── window lifecycle: X na glavnom prozoru SAKRIJE (tray app), ne uništi ──
+        // Bez ovoga Tauri uništi "home" pri zatvaranju, pa ga show_home (tray klik,
+        // hotkey, single-instance) više ne može vratiti. Pravi izlaz = tray "Izlaz".
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "home" {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("[rvgeshot] greška pri pokretanju aplikacije");
 }

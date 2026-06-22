@@ -381,12 +381,25 @@ pub fn add_tag(state: State<AppState>, id: String, tag: String) -> Result<(), St
     state.db.lock().map_err(estr)?.add_tag(&id, tag.trim()).map_err(estr)
 }
 
-/// Otvori glavni prozor (iz traya).
+/// Otvori glavni prozor / galeriju (tray, hotkey, single-instance).
+/// Na zatvaranje (X) prozor se SAMO sakrije (vidi `on_window_event` u lib.rs),
+/// pa ga ovdje obično samo prikažemo. Sigurnosna mreža: ako je "home" ipak
+/// nestao (npr. stari build koji ga je uništavao na X), ponovo ga kreiramo —
+/// galerija se tako UVIJEK može otvoriti.
 #[tauri::command]
 pub fn show_home(app: AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("home") {
+        let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();
+        return Ok(());
     }
+    WebviewWindowBuilder::new(&app, "home", WebviewUrl::App("index.html".into()))
+        .title("RvgeShot")
+        .inner_size(1120.0, 740.0)
+        .min_inner_size(880.0, 560.0)
+        .center()
+        .build()
+        .map_err(estr)?;
     Ok(())
 }

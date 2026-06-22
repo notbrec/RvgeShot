@@ -1,4 +1,8 @@
 //! System tray ikona i quick menu.
+//!
+//! VAŽNO: tray se kreira ISKLJUČIVO ovdje (`TrayIconBuilder`). NE definiraj
+//! `app.trayIcon` u `tauri.conf.json` — Tauri v2 ne spaja dvije registracije po
+//! `id`-u, pa bi jedan proces nacrtao dvije identične ikone ("opet dva upaljena").
 
 use tauri::{
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
