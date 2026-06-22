@@ -23,18 +23,18 @@ const DEFAULTS: AppSettings = {
   hotkey: "PrintScreen",
   format: "png",
   quality: 92,
-  saveFolder: "Slike/RvgeShot",
+  saveFolder: "Pictures/RvgeShot",
   warnSensitive: true,
   stripExif: true,
 };
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "general", label: "Općenito" },
+  { id: "general", label: "General" },
   { id: "hotkeys", label: "Hotkeys" },
   { id: "capture", label: "Capture" },
-  { id: "save", label: "Spremanje" },
-  { id: "privacy", label: "Privatnost" },
-  { id: "about", label: "O aplikaciji" },
+  { id: "save", label: "Save" },
+  { id: "privacy", label: "Privacy" },
+  { id: "about", label: "About" },
 ];
 
 export default function Settings() {
@@ -87,11 +87,11 @@ export default function Settings() {
   };
 
   return (
-    <WindowFrame title="Postavke">
+    <WindowFrame title="Settings">
       <div className="flex min-h-0 flex-1">
         {/* tabovi */}
         <nav className="flex w-48 flex-col gap-1 border-r border-white/5 bg-black/10 p-3">
-        <div className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted">Postavke</div>
+        <div className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted">Settings</div>
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -107,20 +107,20 @@ export default function Settings() {
 
       <div className="min-h-0 flex-1 overflow-auto p-6">
         {tab === "general" && (
-          <Section title="Općenito">
-            <Row label="Tema" hint="Svijetla ili tamna shema sučelja.">
+          <Section title="General">
+            <Row label="Theme" hint="Light or dark interface scheme.">
               <Segmented
                 value={s.theme}
                 options={[
-                  { v: "dark", l: "Tamna" },
-                  { v: "light", l: "Svijetla" },
+                  { v: "dark", l: "Dark" },
+                  { v: "light", l: "Light" },
                 ]}
                 onChange={(v) => applyTheme(v as "dark" | "light")}
               />
             </Row>
             <Row
-              label="Pokreni s Windowsom"
-              hint="Otvori RvgeShot tiho u pozadini pri svakoj prijavi."
+              label="Launch on startup"
+              hint="Open RvgeShot quietly in the background at every sign-in."
             >
               <Toggle checked={autostart} onChange={toggleAutostart} />
             </Row>
@@ -129,7 +129,7 @@ export default function Settings() {
 
         {tab === "hotkeys" && (
           <Section title="Hotkeys">
-            <Row label="Capture regije">
+            <Row label="Region capture">
               <HotkeyInput
                 value={s.hotkey}
                 onChange={async (accel) => {
@@ -143,15 +143,15 @@ export default function Settings() {
               />
             </Row>
             <p className="mt-3 text-xs text-muted">
-              Klikni polje pa pritisni kombinaciju. Promjena se primjenjuje odmah. Capture cijelog
-              ekrana / prozora dodaju se u F2-18.
+              Click the field, then press a combination. Changes apply immediately. Full-screen /
+              window capture coming in F2-18.
             </p>
           </Section>
         )}
 
         {tab === "capture" && (
           <Section title="Capture">
-            <Row label="Zadani format" hint="Format u kojem se spremaju nove snimke.">
+            <Row label="Default format" hint="Format new screenshots are saved in.">
               <Segmented
                 value={s.format}
                 options={[
@@ -162,7 +162,7 @@ export default function Settings() {
                 onChange={(v) => set("format", v as ImageFormat)}
               />
             </Row>
-            <Row label={`Kvaliteta (${s.quality})`}>
+            <Row label={`Quality (${s.quality})`}>
               <input
                 type="range"
                 min={50}
@@ -173,17 +173,17 @@ export default function Settings() {
                 className="w-48"
               />
             </Row>
-            {s.format === "png" && <p className="text-xs text-muted">PNG je lossless — kvaliteta se ne primjenjuje.</p>}
+            {s.format === "png" && <p className="text-xs text-muted">PNG is lossless — quality doesn't apply.</p>}
           </Section>
         )}
 
         {tab === "save" && (
-          <Section title="Spremanje">
+          <Section title="Save">
             <Row label="Folder">
               <div className="flex items-center gap-2">
                 <code className="max-w-xs truncate rounded bg-elevated px-2 py-1 text-xs">{s.saveFolder}</code>
                 <button onClick={pickFolder} className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-elevated">
-                  Promijeni
+                  Change
                 </button>
               </div>
             </Row>
@@ -191,30 +191,30 @@ export default function Settings() {
         )}
 
         {tab === "privacy" && (
-          <Section title="Privatnost">
-            <Row label="Upozori prije uploada na osjetljiv sadržaj">
+          <Section title="Privacy">
+            <Row label="Warn before uploading sensitive content">
               <Toggle checked={s.warnSensitive} onChange={(v) => set("warnSensitive", v)} />
             </Row>
-            <Row label="Ukloni EXIF/metapodatke pri spremanju">
+            <Row label="Strip EXIF/metadata on save">
               <Toggle checked={s.stripExif} onChange={(v) => set("stripExif", v)} />
             </Row>
             <div className="mt-6 rounded-xl border border-danger/40 bg-danger/5 p-4">
-              <div className="mb-1 text-sm font-medium text-danger">Opasna zona</div>
-              <p className="mb-3 text-xs text-muted">Trajno briše lokalnu galeriju i bazu. (F4-3)</p>
+              <div className="mb-1 text-sm font-medium text-danger">Danger zone</div>
+              <p className="mb-3 text-xs text-muted">Permanently deletes the local gallery and database. (F4-3)</p>
               <button
-                onClick={() => alert("TODO (F4-3): brisanje svih lokalnih podataka.")}
+                onClick={() => alert("TODO (F4-3): delete all local data.")}
                 className="rounded-lg border border-danger px-3 py-1.5 text-sm text-danger hover:bg-danger hover:text-white"
               >
-                Obriši sve lokalne podatke
+                Delete all local data
               </button>
             </div>
           </Section>
         )}
 
         {tab === "about" && (
-          <Section title="O aplikaciji">
-            <p className="text-sm text-muted">RvgeShot · verzija 0.1.0 (skeleton)</p>
-            <p className="mt-2 text-sm text-muted">Brzi, privatni screenshot alat. Privatnost ugrađena, ne dodana.</p>
+          <Section title="About">
+            <p className="text-sm text-muted">RvgeShot · version 0.1.2</p>
+            <p className="mt-2 text-sm text-muted">Fast, private screenshot tool. Privacy built in, not bolted on.</p>
           </Section>
         )}
       </div>
@@ -279,7 +279,7 @@ function HotkeyInput({ value, onChange }: { value: string; onChange: (accel: str
   return (
     <input
       readOnly
-      value={capturing ? "Pritisni kombinaciju…" : value}
+      value={capturing ? "Press a combination…" : value}
       onFocus={() => setCapturing(true)}
       onBlur={() => setCapturing(false)}
       onKeyDown={(e) => {

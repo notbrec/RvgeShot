@@ -39,7 +39,7 @@ export default function Home() {
   }, [load, query]);
 
   const onDelete = async (s: Screenshot) => {
-    if (!confirm(`Obrisati "${s.name}"?`)) return;
+    if (!confirm(`Delete "${s.name}"?`)) return;
     await ipc.deleteScreenshot(s.id, s.filePath);
     setItems((prev) => prev.filter((x) => x.id !== s.id));
   };
@@ -57,7 +57,7 @@ export default function Home() {
     if (existing) return existing.setFocus();
     new WebviewWindow("settings", {
       url: "index.html#settings",
-      title: "RvgeShot — Postavke",
+      title: "RvgeShot — Settings",
       width: 860,
       height: 660,
       center: true,
@@ -73,18 +73,18 @@ export default function Home() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Pretraži po imenu ili tagu…"
+            placeholder="Search by name or tag…"
             className="w-full rounded-full bg-elevated/80 py-2 pl-10 pr-4 text-sm outline-none ring-1 ring-white/10 transition focus:ring-2 focus:ring-accent"
           />
         </div>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={captureRegion} className="flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-glow transition hover:brightness-110 active:scale-95">
-            <Crop size={16} /> Uhvati regiju
+            <Crop size={16} /> Capture region
           </button>
           <button onClick={captureFull} className="flex items-center gap-2 rounded-full px-3.5 py-2 text-sm ring-1 ring-white/10 transition hover:bg-elevated active:scale-95">
-            <Monitor size={16} /> Cijeli ekran
+            <Monitor size={16} /> Full screen
           </button>
-          <button onClick={openSettings} title="Postavke" className="grid h-9 w-9 place-items-center rounded-full ring-1 ring-white/10 transition hover:bg-elevated active:scale-95">
+          <button onClick={openSettings} title="Settings" className="grid h-9 w-9 place-items-center rounded-full ring-1 ring-white/10 transition hover:bg-elevated active:scale-95">
             <SettingsIcon size={18} />
           </button>
         </div>
@@ -93,7 +93,7 @@ export default function Home() {
       {/* galerija */}
       <main className="min-h-0 flex-1 overflow-auto px-5 pb-5">
         {loading && items.length === 0 ? (
-          <div className="grid h-full place-items-center text-muted">Učitavanje…</div>
+          <div className="grid h-full place-items-center text-muted">Loading…</div>
         ) : items.length === 0 ? (
           <EmptyState onCapture={captureRegion} hasQuery={!!query.trim()} />
         ) : (
@@ -122,10 +122,10 @@ function Card({ shot, onDelete }: { shot: Screenshot; onDelete: () => void }) {
         </div>
       </div>
       <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <button onClick={() => openPath(shot.filePath)} title="Otvori" className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur transition hover:bg-black/75">
+        <button onClick={() => openPath(shot.filePath)} title="Open" className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur transition hover:bg-black/75">
           <ExternalLink size={15} />
         </button>
-        <button onClick={onDelete} title="Obriši" className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur transition hover:bg-danger">
+        <button onClick={onDelete} title="Delete" className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur transition hover:bg-danger">
           <Trash2 size={15} />
         </button>
       </div>
@@ -140,13 +140,13 @@ function EmptyState({ onCapture, hasQuery }: { onCapture: () => void; hasQuery: 
         <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-elevated/60 ring-1 ring-white/10">
           <ImageOff size={26} className="text-muted" />
         </div>
-        <h2 className="mb-1 text-lg font-semibold tracking-tight">{hasQuery ? "Nema rezultata" : "Još nema snimaka"}</h2>
+        <h2 className="mb-1 text-lg font-semibold tracking-tight">{hasQuery ? "No results" : "No screenshots yet"}</h2>
         <p className="mb-5 text-sm text-muted">
-          {hasQuery ? "Pokušaj drugi pojam." : "Pritisni hotkey ili gumb da uhvatiš prvi screenshot."}
+          {hasQuery ? "Try a different term." : "Press the hotkey or button to capture your first screenshot."}
         </p>
         {!hasQuery && (
           <button onClick={onCapture} className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-glow transition hover:brightness-110 active:scale-95">
-            Uhvati regiju
+            Capture region
           </button>
         )}
       </div>

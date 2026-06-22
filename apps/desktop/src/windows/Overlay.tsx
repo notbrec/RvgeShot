@@ -37,16 +37,16 @@ type Dir = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 type DragOp = { type: "move" | "resize"; dir: Dir; sx: number; sy: number; start: Rect };
 
 const TOOLS: { id: EditorTool; icon: typeof Square; label: string }[] = [
-  { id: "select", icon: MousePointer2, label: "Pomakni / mijenjaj okvir" },
-  { id: "arrow", icon: ArrowUpRight, label: "Strelica" },
-  { id: "rect", icon: Square, label: "Pravokutnik" },
-  { id: "ellipse", icon: Circle, label: "Elipsa" },
-  { id: "line", icon: Minus, label: "Linija" },
-  { id: "pen", icon: PenTool, label: "Olovka" },
+  { id: "select", icon: MousePointer2, label: "Move / resize frame" },
+  { id: "arrow", icon: ArrowUpRight, label: "Arrow" },
+  { id: "rect", icon: Square, label: "Rectangle" },
+  { id: "ellipse", icon: Circle, label: "Ellipse" },
+  { id: "line", icon: Minus, label: "Line" },
+  { id: "pen", icon: PenTool, label: "Pen" },
   { id: "marker", icon: Highlighter, label: "Marker" },
-  { id: "step", icon: ListOrdered, label: "Numerirani korak" },
+  { id: "step", icon: ListOrdered, label: "Numbered step" },
   { id: "blur", icon: EyeOff, label: "Blur / redact" },
-  { id: "text", icon: Type, label: "Tekst" },
+  { id: "text", icon: Type, label: "Text" },
 ];
 
 const SWATCHES = [
@@ -353,7 +353,7 @@ export default function Overlay() {
     const hex = pixelHex(e.clientX, e.clientY);
     setColor(hex);
     setTool(prevTool.current === "eyedropper" ? "arrow" : prevTool.current);
-    setToast(`Boja ${hex.toUpperCase()}`);
+    setToast(`Color ${hex.toUpperCase()}`);
   };
 
   const selectTool = (id: EditorTool) => {
@@ -383,8 +383,8 @@ export default function Overlay() {
       if (!sel || !frozenRef.current) return;
       try {
         const b64 = exportPng();
-        if (action === "copy") { await ipc.copyBase64ToClipboard(b64); setToast("Kopirano u međuspremnik"); }
-        else { await ipc.saveEditedImage(b64, "png", 100); setToast("Spremljeno u galeriju"); }
+        if (action === "copy") { await ipc.copyBase64ToClipboard(b64); setToast("Copied to clipboard"); }
+        else { await ipc.saveEditedImage(b64, "png", 100); setToast("Saved to gallery"); }
         closeSoon();
       } catch (err) {
         console.error(err);
@@ -409,7 +409,7 @@ export default function Overlay() {
       if (!path) return;
       const fmt = path.toLowerCase().endsWith(".jpg") ? "jpg" : path.toLowerCase().endsWith(".webp") ? "webp" : "png";
       await ipc.saveImageAs(exportPng(), path, fmt, 92);
-      setToast("Spremljeno");
+      setToast("Saved");
       closeSoon();
     } catch (err) {
       console.error(err);
@@ -479,7 +479,7 @@ export default function Overlay() {
 
       {!sel && (
         <div className="lg-chip pointer-events-none absolute left-1/2 top-7 -translate-x-1/2 text-sm text-white animate-fade">
-          Povuci za odabir &nbsp;·&nbsp; <kbd className="font-mono">Esc</kbd> za izlaz
+          Drag to select &nbsp;·&nbsp; <kbd className="font-mono">Esc</kbd> to exit
         </div>
       )}
 
@@ -573,7 +573,7 @@ export default function Overlay() {
             else if (e.key === "Escape") { setTextEdit(null); setTextValue(""); }
             e.stopPropagation();
           }}
-          placeholder="Tipkaj…"
+          placeholder="Type…"
           className="absolute z-40 border-0 bg-black/25 p-0 outline-none placeholder:text-white/45"
           style={{
             left: textEdit.x, top: textEdit.y, color, caretColor: color,
@@ -618,11 +618,11 @@ export default function Overlay() {
               </div>
               <div className="mt-3 flex items-center justify-between">
                 <label className="flex items-center gap-2 text-xs text-white/80">
-                  Vlastita
+                  Custom
                   <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-7 w-9 cursor-pointer rounded bg-transparent" />
                 </label>
                 <button onClick={() => selectTool("eyedropper")} className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs text-white hover:bg-white/15">
-                  <Pipette size={14} /> Pipeta
+                  <Pipette size={14} /> Eyedropper
                 </button>
               </div>
             </div>
@@ -648,10 +648,10 @@ export default function Overlay() {
               </button>
             ))}
             <span className="lg-sep" />
-            <button title="Boja" onClick={() => setPopover(popover === "color" ? null : "color")} className="lg-btn">
+            <button title="Color" onClick={() => setPopover(popover === "color" ? null : "color")} className="lg-btn">
               <span className="h-4 w-4 rounded-full border border-white/40" style={{ background: color }} />
             </button>
-            <button title="Debljina" onClick={() => setPopover(popover === "size" ? null : "size")} className="lg-btn">
+            <button title="Thickness" onClick={() => setPopover(popover === "size" ? null : "size")} className="lg-btn">
               <span className="rounded-full bg-current" style={{ width: Math.min(16, size + 2), height: Math.min(16, size + 2) }} />
             </button>
             <span className="lg-sep" />
@@ -665,19 +665,19 @@ export default function Overlay() {
 
           {/* Grupa 2 — akcije */}
           <div className="lg lg-bar animate-pop">
-            <button title="Kopiraj (Ctrl+C)" onClick={() => finish("copy")} className="lg-btn">
+            <button title="Copy (Ctrl+C)" onClick={() => finish("copy")} className="lg-btn">
               <Copy size={16} />
             </button>
-            <button title="Spremi kao…" onClick={saveAs} className="lg-btn">
+            <button title="Save as…" onClick={saveAs} className="lg-btn">
               <Save size={16} />
             </button>
-            <button title="Spremi u galeriju (Ctrl+S)" onClick={() => finish("save")} className="lg-btn">
+            <button title="Save to gallery (Ctrl+S)" onClick={() => finish("save")} className="lg-btn">
               <Download size={16} />
             </button>
-            <button title="Privatni upload (Faza 3)" onClick={() => setToast("Privatni upload stiže u Fazi 3")} className="lg-btn">
+            <button title="Private upload (Phase 3)" onClick={() => setToast("Private upload coming in Phase 3")} className="lg-btn">
               <Upload size={16} />
             </button>
-            <button title="Odustani (Esc)" onClick={() => ipc.cancelCapture()} className="lg-btn">
+            <button title="Cancel (Esc)" onClick={() => ipc.cancelCapture()} className="lg-btn">
               <X size={16} />
             </button>
           </div>

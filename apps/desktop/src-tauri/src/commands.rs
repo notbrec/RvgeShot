@@ -205,7 +205,7 @@ pub fn get_frozen_frame(state: State<AppState>, monitor_id: u32) -> Result<Strin
     let frame = frozen
         .frames
         .get(&monitor_id)
-        .ok_or_else(|| format!("nema frozen frame za monitor {monitor_id}"))?;
+        .ok_or_else(|| format!("no frozen frame for monitor {monitor_id}"))?;
     capture::to_png_data_url(frame).map_err(estr)
 }
 
@@ -248,7 +248,7 @@ pub fn finish_region_capture(
         let frame = frozen
             .frames
             .get(&region.monitor_id)
-            .ok_or("frozen frame nedostaje")?;
+            .ok_or("frozen frame missing")?;
         capture::crop(frame, &region)
     };
 
@@ -271,7 +271,7 @@ pub fn finish_region_capture(
         }
         CaptureAction::Upload => {
             // Faza 3 — vidi docs/SPECIFICATION.md §3.3
-            Err("Upload dolazi u Fazi 3".into())
+            Err("Upload coming in Phase 3".into())
         }
     }
 }
@@ -299,7 +299,7 @@ pub fn capture_fullscreen(
 /// Capture aktivnog prozora — TODO (F1-10): xcap::Window + fokusirani prozor.
 #[tauri::command]
 pub fn capture_active_window() -> Result<Screenshot, String> {
-    Err("Capture aktivnog prozora: TODO (F1-10)".into())
+    Err("Active window capture: TODO (F1-10)".into())
 }
 
 /// Spremi sliku iz editora (base64 PNG s canvasa) u galeriju.

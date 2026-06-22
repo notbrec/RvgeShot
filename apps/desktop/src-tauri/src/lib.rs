@@ -81,7 +81,7 @@ pub fn run() {
         ])
         // ── window lifecycle: X na glavnom prozoru SAKRIJE (tray app), ne uništi ──
         // Bez ovoga Tauri uništi "home" pri zatvaranju, pa ga show_home (tray klik,
-        // hotkey, single-instance) više ne može vratiti. Pravi izlaz = tray "Izlaz".
+        // hotkey, single-instance) više ne može vratiti. Pravi izlaz = tray "Quit".
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "home" {

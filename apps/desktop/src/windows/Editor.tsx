@@ -19,14 +19,14 @@ import type { Annotation, EditorTool, Point } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 
 const TOOLS: { id: EditorTool; icon: typeof Square; label: string }[] = [
-  { id: "select", icon: MousePointer2, label: "Odabir" },
-  { id: "arrow", icon: ArrowUpRight, label: "Strelica" },
-  { id: "rect", icon: Square, label: "Pravokutnik" },
-  { id: "line", icon: Minus, label: "Linija" },
-  { id: "pen", icon: PenTool, label: "Olovka" },
+  { id: "select", icon: MousePointer2, label: "Select" },
+  { id: "arrow", icon: ArrowUpRight, label: "Arrow" },
+  { id: "rect", icon: Square, label: "Rectangle" },
+  { id: "line", icon: Minus, label: "Line" },
+  { id: "pen", icon: PenTool, label: "Pen" },
   { id: "marker", icon: Highlighter, label: "Marker" },
   { id: "blur", icon: EyeOff, label: "Blur / redact" },
-  { id: "text", icon: Type, label: "Tekst" },
+  { id: "text", icon: Type, label: "Text" },
 ];
 
 const COLORS = ["#ef4444", "#f59e0b", "#22c55e", "#3b82f6", "#a855f7", "#ffffff", "#18181b"];
@@ -138,7 +138,7 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
     if (tool === "select" || !ready) return;
     const p = toCanvas(e);
     if (tool === "text") {
-      const text = window.prompt("Tekst:");
+      const text = window.prompt("Text:");
       if (text) commit({ id: uid(), tool: "text", color, size, points: [p], text });
       return;
     }
@@ -242,7 +242,7 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
         <div className="mx-1 h-5 w-px bg-border" />
         {/* stroke */}
         <label className="flex items-center gap-2 text-xs text-muted">
-          Debljina
+          Thickness
           <input type="range" min={2} max={28} value={size} onChange={(e) => setSize(+e.target.value)} />
           <span className="w-6 font-mono">{size}</span>
         </label>
@@ -255,10 +255,10 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
           </IconBtn>
           <div className="mx-1 h-5 w-px bg-border" />
           <button onClick={onCopy} className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm hover:bg-elevated">
-            <Copy size={16} /> Kopiraj
+            <Copy size={16} /> Copy
           </button>
           <button onClick={onSave} className="flex items-center gap-2 rounded-lg bg-accent px-3 py-1.5 text-sm text-white hover:opacity-90">
-            <Save size={16} /> Spremi
+            <Save size={16} /> Save
           </button>
         </div>
       </div>
@@ -282,7 +282,7 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
 
         {/* canvas */}
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-bg p-6">
-          {!ready && <div className="text-muted">Učitavanje slike…</div>}
+          {!ready && <div className="text-muted">Loading image…</div>}
           <canvas
             ref={canvasRef}
             onMouseDown={onDown}

@@ -14,16 +14,16 @@ use crate::models::ImageFormat;
 
 pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let capture_region =
-        MenuItem::with_id(app, "capture_region", "Uhvati regiju", true, Some("PrintScreen"))?;
+        MenuItem::with_id(app, "capture_region", "Capture Region", true, Some("PrintScreen"))?;
     let capture_full =
-        MenuItem::with_id(app, "capture_full", "Uhvati cijeli ekran", true, None::<&str>)?;
+        MenuItem::with_id(app, "capture_full", "Capture Full Screen", true, None::<&str>)?;
     let capture_window =
-        MenuItem::with_id(app, "capture_window", "Uhvati prozor", true, None::<&str>)?;
+        MenuItem::with_id(app, "capture_window", "Capture Window", true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
-    let open_gallery = MenuItem::with_id(app, "open_gallery", "Galerija", true, None::<&str>)?;
-    let open_settings = MenuItem::with_id(app, "open_settings", "Postavke", true, None::<&str>)?;
+    let open_gallery = MenuItem::with_id(app, "open_gallery", "Gallery", true, None::<&str>)?;
+    let open_settings = MenuItem::with_id(app, "open_settings", "Settings", true, None::<&str>)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "Izlaz", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
     let menu = Menu::with_items(
         app,
@@ -98,7 +98,7 @@ fn open_settings(app: &AppHandle) -> tauri::Result<()> {
         return Ok(());
     }
     WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("index.html#settings".into()))
-        .title("RvgeShot — Postavke")
+        .title("RvgeShot — Settings")
         .inner_size(860.0, 660.0)
         .center()
         .build()?;
