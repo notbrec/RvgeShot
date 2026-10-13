@@ -33,11 +33,10 @@ pub fn list_monitors() -> Result<Vec<MonitorInfo>> {
     monitors.iter().map(monitor_info).collect()
 }
 
-/// Uhvati JEDAN monitor — onaj koji sadrži točku (x,y) (poziciju miša). Fallback: primarni, pa prvi.
-/// Jedan monitor = jedan capture + jedan transfer = brzo i malo RAM-a, bez paralelnih dretvi.
-pub fn capture_at(x: i32, y: i32) -> Result<(MonitorInfo, RgbaImage)> {
+/// Monitor koji sadrži točku (x,y) (poziciju miša). Fallback: primarni, pa prvi.
+fn monitor_containing(x: i32, y: i32) -> Result<Monitor> {
     let monitors = Monitor::all().map_err(|e| anyhow!("xcap monitors: {e}"))?;
-    let m = monitors
+    monitors
         .iter()
         .find(|m| {
             let mx = m.x().unwrap_or(0);
@@ -48,8 +47,21 @@ pub fn capture_at(x: i32, y: i32) -> Result<(MonitorInfo, RgbaImage)> {
         })
         .or_else(|| monitors.iter().find(|m| m.is_primary().unwrap_or(false)))
         .or_else(|| monitors.first())
-        .ok_or_else(|| anyhow!("nema dostupnog monitora"))?;
-    let info = monitor_info(m)?;
+        .cloned()
+        .ok_or_else(|| anyhow!("nema dostupnog monitora"))
+}
+
+/// Samo geometrija monitora pod mišem — bez hvatanja slike. Record-mode overlay
+/// pokazuje živi desktop, pa mu screenshot ne treba (a to je ~300 ms uštede).
+pub fn monitor_at(x: i32, y: i32) -> Result<MonitorInfo> {
+    monitor_info(&monitor_containing(x, y)?)
+}
+
+/// Uhvati JEDAN monitor — onaj koji sadrži točku (x,y) (poziciju miša). Fallback: primarni, pa prvi.
+/// Jedan monitor = jedan capture + jedan transfer = brzo i malo RAM-a, bez paralelnih dretvi.
+pub fn capture_at(x: i32, y: i32) -> Result<(MonitorInfo, RgbaImage)> {
+    let m = monitor_containing(x, y)?;
+    let info = monitor_info(&m)?;
     let img = m.capture_image().map_err(|e| anyhow!("capture: {e}"))?;
     Ok((info, img))
 }
@@ -137,51 +149,4 @@ pub fn to_png_data_url(img: &RgbaImage) -> Result<String> {
     let png = encode_png_fast(img)?;
     let b64 = base64::engine::general_purpose::STANDARD.encode(png);
     Ok(format!("data:image/png;base64,{b64}"))
-}
-
-/// DESTRUKTIVNI redact: pikselizira regiju u samoj slici (original se ne može vratiti).
-/// Ovo je sigurnosno bitno — redact MORA biti na rasteru, ne CSS preko piksela (spec §8).
-/// Rust-side helper za F2-7 / redact-prije-uploada (frontend zasad blura na canvasu).
-#[allow(dead_code)]
-pub fn pixelate_region(img: &mut RgbaImage, region: &Region, block: u32) {
-    let block = block.max(2);
-    let (iw, ih) = (img.width(), img.height());
-    let x0 = region.x.max(0) as u32;
-    let y0 = region.y.max(0) as u32;
-    let x1 = (x0 + region.width).min(iw);
-    let y1 = (y0 + region.height).min(ih);
-
-    let mut by = y0;
-    while by < y1 {
-        let mut bx = x0;
-        while bx < x1 {
-            // prosječna boja bloka
-            let (mut r, mut g, mut b, mut a, mut n) = (0u64, 0u64, 0u64, 0u64, 0u64);
-            for yy in by..(by + block).min(y1) {
-                for xx in bx..(bx + block).min(x1) {
-                    let p = img.get_pixel(xx, yy).0;
-                    r += p[0] as u64;
-                    g += p[1] as u64;
-                    b += p[2] as u64;
-                    a += p[3] as u64;
-                    n += 1;
-                }
-            }
-            if n > 0 {
-                let avg = image::Rgba([
-                    (r / n) as u8,
-                    (g / n) as u8,
-                    (b / n) as u8,
-                    (a / n) as u8,
-                ]);
-                for yy in by..(by + block).min(y1) {
-                    for xx in bx..(bx + block).min(x1) {
-                        img.put_pixel(xx, yy, avg);
-                    }
-                }
-            }
-            bx += block;
-        }
-        by += block;
-    }
 }

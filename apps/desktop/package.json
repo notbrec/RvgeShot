@@ -1,9 +1,9 @@
 {
   "name": "rvgeshot-desktop",
   "private": true,
-  "version": "0.1.3",
+  "version": "0.2.1",
   "type": "module",
-  "description": "RvgeShot — brzi, privatni screenshot alat (desktop)",
+  "description": "RvgeShot — brzi, privatni screenshot i screen-recording alat (desktop)",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

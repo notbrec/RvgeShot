@@ -1,8 +1,15 @@
 //! Tauri komande — jedini most između frontenda i jezgre.
 //! Frontend ih zove preko `invoke()` (vidi `src/lib/ipc.ts`).
+//!
+//! Pravilo dretvi: NIŠTA što dira ekran (xcap, DXGI, enkoder) ne smije se izvoditi
+//! na glavnoj dretvi ni u callbacku globalnog hotkeya. Sinkrone Tauri komande rade
+//! na glavnoj dretvi, a hotkey callback na dretvi listenera — grafički capture na
+//! bilo kojoj od njih zna blokirati petlju poruka ili paničariti u tuđem FFI kodu,
+//! što je uz `panic = "abort"` značilo trenutni nestanak aplikacije.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use base64::Engine;
 use chrono::{Local, Utc};
@@ -12,22 +19,66 @@ use tauri::{
     WebviewWindowBuilder,
 };
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_store::StoreExt;
 use uuid::Uuid;
 
 use crate::capture;
-use crate::models::{CaptureAction, CaptureSource, ImageFormat, MonitorInfo, Region, Screenshot};
-use crate::state::AppState;
+use crate::logging::{self, log};
+use crate::models::{
+    CaptureAction, CaptureSource, ImageFormat, MonitorInfo, PixelRect, RecFrameRect,
+    RecordOptions, RecordStatus, Region, Screenshot,
+};
+use crate::record::{self, RecordTarget};
+use crate::state::{lock, AppState};
 
 fn estr<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
+/// Capture je "u letu" — sprječava da drugi pritisak hotkeya krene prije nego prvi
+/// završi. Bez ovoga se overlay zna repozicionirati usred učitavanja framea.
+static CAPTURE_BUSY: AtomicBool = AtomicBool::new(false);
+
+/// Način rada overlaya: obična snimka zaslona ili odabir područja za snimanje videa.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CaptureMode {
+    Shot,
+    Record,
+}
+
+impl CaptureMode {
+    fn as_str(&self) -> &'static str {
+        match self {
+            CaptureMode::Shot => "shot",
+            CaptureMode::Record => "record",
+        }
+    }
+}
+
 // ──────────────────────────────── putanje ────────────────────────────────
 
-/// Folder galerije (default: Slike/RvgeShot). TODO: čitaj iz settings store-a (F2-17).
-fn gallery_dir(app: &AppHandle) -> Result<PathBuf, String> {
+/// Folder galerije. Poštuje `saveFolder` iz Settingsa kad je apsolutna putanja,
+/// inače Slike/RvgeShot.
+pub(crate) fn gallery_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Some(custom) = configured_folder(app) {
+        return Ok(custom);
+    }
     let base = app.path().picture_dir().map_err(estr)?;
     Ok(base.join("RvgeShot"))
+}
+
+/// Pročitaj korisnički odabran folder iz store-a. Sve greške → None (fallback).
+fn configured_folder(app: &AppHandle) -> Option<PathBuf> {
+    let store = app.store("settings.json").ok()?;
+    let value = store.get("saveFolder")?;
+    let s = value.as_str()?.trim().to_string();
+    if s.is_empty() {
+        return None;
+    }
+    let p = PathBuf::from(s);
+    // Default vrijednost iz UI-ja ("Pictures/RvgeShot") je relativna — nju ignoriramo.
+    p.is_absolute().then_some(p)
 }
 
 fn thumbs_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -56,18 +107,12 @@ fn save_to_gallery(
     let path = dir.join(format!("{name}.{}", format.ext()));
     fs::write(&path, &bytes).map_err(estr)?;
 
-    // thumbnail (WebP, max 480px)
-    let tdir = thumbs_dir(app)?;
-    fs::create_dir_all(&tdir).map_err(estr)?;
-    let thumb = capture::thumbnail(img, 480);
-    let thumb_bytes = capture::encode(&thumb, ImageFormat::Webp, 80).map_err(estr)?;
-    let thumb_path = tdir.join(format!("{id}.webp"));
-    fs::write(&thumb_path, &thumb_bytes).map_err(estr)?;
+    let thumb_path = write_thumbnail(app, &id, img);
 
     let shot = Screenshot {
         id,
         file_path: path.to_string_lossy().into_owned(),
-        thumb_path: Some(thumb_path.to_string_lossy().into_owned()),
+        thumb_path,
         name,
         format: format.ext().to_string(),
         width: img.width(),
@@ -79,8 +124,59 @@ fn save_to_gallery(
         tags: Vec::new(),
     };
 
-    state.db.lock().map_err(estr)?.insert(&shot).map_err(estr)?;
+    lock(&state.db).insert(&shot).map_err(estr)?;
     Ok(shot)
+}
+
+/// Upiši u galeriju datoteku koja je VEĆ na disku (snimka videa). Thumbnail se
+/// generira iz prvog framea koji je snimatelj sačuvao.
+pub(crate) fn register_media(
+    app: &AppHandle,
+    path: &Path,
+    width: u32,
+    height: u32,
+    source: CaptureSource,
+    ext: &str,
+    thumb: Option<&image::RgbaImage>,
+) -> Result<Screenshot, String> {
+    let size_bytes = fs::metadata(path).map(|m| m.len()).map_err(estr)?;
+    let id = Uuid::new_v4().to_string();
+    let name = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| format!("RvgeShot {}", Local::now().format("%Y-%m-%d %H.%M.%S")));
+
+    let thumb_path = thumb.and_then(|img| write_thumbnail(app, &id, img));
+
+    let shot = Screenshot {
+        id,
+        file_path: path.to_string_lossy().into_owned(),
+        thumb_path,
+        name,
+        format: ext.to_string(),
+        width,
+        height,
+        size_bytes,
+        source: source.as_str().to_string(),
+        created_at: Utc::now().timestamp_millis(),
+        is_uploaded: false,
+        tags: Vec::new(),
+    };
+
+    let state = app.state::<AppState>();
+    lock(&state.db).insert(&shot).map_err(estr)?;
+    Ok(shot)
+}
+
+/// Thumbnail (WebP, max 480px). Neuspjeh nije fatalan — galerija onda pokaže original.
+fn write_thumbnail(app: &AppHandle, id: &str, img: &image::RgbaImage) -> Option<String> {
+    let tdir = thumbs_dir(app).ok()?;
+    fs::create_dir_all(&tdir).ok()?;
+    let thumb = capture::thumbnail(img, 480);
+    let bytes = capture::encode(&thumb, ImageFormat::Webp, 80).ok()?;
+    let path = tdir.join(format!("{id}.webp"));
+    fs::write(&path, &bytes).ok()?;
+    Some(path.to_string_lossy().into_owned())
 }
 
 fn copy_rgba_to_clipboard(app: &AppHandle, img: &image::RgbaImage) -> Result<(), String> {
@@ -102,6 +198,56 @@ fn cursor_pos() -> (i32, i32) {
     (0, 0)
 }
 
+/// Izuzmi prozor iz SVAKOG snimanja/capture-a ekrana (Windows 10 2004+).
+///
+/// Bez ovoga bi HUD s tajmerom i sam overlay završili u snimci cijelog monitora —
+/// macOS svoju traku skriva na isti način.
+#[cfg(windows)]
+fn exclude_from_capture(win: &tauri::WebviewWindow) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE};
+    let Ok(handle) = win.hwnd() else { return };
+    // Tauri vraća HWND iz svoje verzije `windows` cratea; oba su newtype nad *mut c_void.
+    let hwnd = HWND(handle.0 as _);
+    if unsafe { SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) }.is_err() {
+        log("WDA_EXCLUDEFROMCAPTURE nije podržan na ovoj verziji Windowsa");
+    }
+}
+
+#[cfg(not(windows))]
+fn exclude_from_capture(_win: &tauri::WebviewWindow) {}
+
+/// Digni prozor na vrh topmost sloja BEZ aktivacije.
+///
+/// Oba prozora snimanja su always-on-top; među takvima pobjeđuje zadnji aktivirani.
+/// Čim sloj za crtanje dobije fokus, digne se IZNAD HUD-a — i ako regija pokriva dno
+/// ekrana, svaki klik na "Stop" postane potez olovkom. Tauri `set_always_on_top`
+/// ne pomaže (flag je već postavljen, pa ne zove SetWindowPos).
+#[cfg(windows)]
+pub fn raise_topmost(win: &tauri::WebviewWindow) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    };
+    let Ok(handle) = win.hwnd() else { return };
+    let hwnd = HWND(handle.0 as _);
+    let _ = unsafe { SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) };
+}
+
+#[cfg(not(windows))]
+pub fn raise_topmost(win: &tauri::WebviewWindow) {
+    let _ = win.set_always_on_top(true);
+}
+
+/// HUD mora ostati klikabilan što god se dogodilo sa slojem za crtanje.
+pub fn raise_hud(app: &AppHandle) {
+    if let Some(hud) = app.get_webview_window("recbar") {
+        if hud.is_visible().unwrap_or(false) {
+            raise_topmost(&hud);
+        }
+    }
+}
+
 /// Sakrij (ne zatvaraj!) overlay — ostaje "topao" za sljedeći capture.
 fn hide_overlays(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("overlay") {
@@ -111,21 +257,91 @@ fn hide_overlays(app: &AppHandle) {
 
 /// Pred-kreiraj JEDAN skriveni overlay prozor ("overlay") ako ne postoji.
 /// Webview se učita unaprijed → prikaz na hotkey je instant; pozicioniramo ga po monitoru pri capture-u.
+///
+/// Prozor je transparentan: u shot modu CSS ga čini crnim i preko njega ide zamrznuti
+/// frame (ništa se ne mijenja), a u record modu propušta živi desktop pa odabir
+/// područja ne treba nikakav screenshot.
 pub fn ensure_overlay(app: &AppHandle) -> Result<(), String> {
     if app.get_webview_window("overlay").is_some() {
         return Ok(());
     }
-    WebviewWindowBuilder::new(app, "overlay", WebviewUrl::App("index.html#overlay".into()))
+    let win = WebviewWindowBuilder::new(app, "overlay", WebviewUrl::App("index.html#overlay".into()))
         .decorations(false)
         .always_on_top(true)
         .skip_taskbar(true)
         .resizable(false)
         .shadow(false)
+        .transparent(true)
         .visible(false)
         .build()
         .map_err(estr)?;
+    exclude_from_capture(&win);
     Ok(())
 }
+
+/// Pred-kreiraj HUD i sloj za crtanje (skrivene). Stvaranje WebView2 prozora traje
+/// ~0.5 s po prozoru — kad bi se radilo tek na klik "Record", snimanje bi već teklo
+/// sekundu prije nego korisnik vidi ikakvu kontrolu.
+pub fn ensure_rec_windows(app: &AppHandle) -> Result<(), String> {
+    if app.get_webview_window("recbar").is_none() {
+        let win = WebviewWindowBuilder::new(app, "recbar", WebviewUrl::App("index.html#recbar".into()))
+            .title("RvgeShot — Recording")
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .shadow(false)
+            .transparent(true)
+            // WS_EX_NOACTIVATE: gumbi rade na klik, ali tipkovnica NIKAD ne prelazi na
+            // HUD — inače Enter/brojke pritisnute "u svojoj aplikaciji" završe ovdje.
+            .focusable(false)
+            .inner_size(REC_HUD_W as f64, REC_HUD_H as f64)
+            .visible(false)
+            .build()
+            .map_err(estr)?;
+        exclude_from_capture(&win);
+    }
+    if app.get_webview_window("recdraw").is_none() {
+        let win = WebviewWindowBuilder::new(app, "recdraw", WebviewUrl::App("index.html#recdraw".into()))
+            .title("RvgeShot — Draw")
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .shadow(false)
+            .transparent(true)
+            .focused(false)
+            .visible(false)
+            .build()
+            .map_err(estr)?;
+        let _ = win.set_ignore_cursor_events(true);
+    }
+    if app.get_webview_window("recframe").is_none() {
+        // Okvir snimanja: cijeli monitor, zatamni sve OKO snimanog područja i nacrta rub.
+        // Izuzet je iz capture-a (dim ne smije završiti u videu) i propušta sve klikove.
+        let win = WebviewWindowBuilder::new(app, "recframe", WebviewUrl::App("index.html#recframe".into()))
+            .title("RvgeShot — Frame")
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .shadow(false)
+            .transparent(true)
+            .focusable(false)
+            .visible(false)
+            .build()
+            .map_err(estr)?;
+        let _ = win.set_ignore_cursor_events(true);
+        exclude_from_capture(&win);
+    }
+    Ok(())
+}
+
+/// Traka nosi tajmer, alate za crtanje i kontrole snimanja.
+/// Širina je zbroj svih gumba (10 alata + boja/undo/clear + pauza/stop/odbaci + info):
+/// preuska traka tiho odreže desne gumbe — flex djeca su `shrink-0`.
+const REC_HUD_W: u32 = 820;
+const REC_HUD_H: u32 = 58;
 
 fn open_editor_window(app: &AppHandle, file_path: &str) -> Result<(), String> {
     // Putanju proslijedimo base64-encoded u hashu (izbjegava probleme s razmacima/\).
@@ -148,7 +364,7 @@ fn open_editor_window(app: &AppHandle, file_path: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub fn list_monitors() -> Result<Vec<MonitorInfo>, String> {
-    capture::list_monitors().map_err(estr)
+    logging::guard("list_monitors", || capture::list_monitors().map_err(estr))
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -156,24 +372,92 @@ struct CapturePayload {
     path: String,
     token: i64,
     id: u32,
+    mode: &'static str,
+    /// Fizička pozicija/veličina monitora — overlay ih šalje natrag pri pokretanju snimanja.
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
 }
 
-/// Zamrzni monitor POD MIŠEM: spremi frame na disk i javi overlayu putanju (asset protokol = brzo).
+/// Pokreni odabir područja. Vraća ODMAH — pravi capture ide na radnu dretvu, a
+/// overlay se javi kad je frame spreman (`rvge:capture`).
 #[tauri::command]
-pub fn begin_region_capture(app: AppHandle) -> Result<(), String> {
+pub fn begin_region_capture(app: AppHandle, mode: Option<CaptureMode>) -> Result<(), String> {
+    dispatch_region_capture(&app, mode.unwrap_or(CaptureMode::Shot));
+    Ok(())
+}
+
+/// Zajednička ulazna točka za hotkey, tray i frontend.
+pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
+    if record::is_active(app) {
+        let _ = app.emit("rvge:toast", "Snimanje je u tijeku");
+        return;
+    }
+    // Drugi pritisak dok je overlay već gore = odustani. Prije je ponovno hvatao
+    // ekran (uključujući sam overlay) — beskorisno i sporo.
+    if let Some(win) = app.get_webview_window("overlay") {
+        if win.is_visible().unwrap_or(false) {
+            let _ = win.hide();
+            lock(&app.state::<AppState>().frozen).clear();
+            return;
+        }
+    }
+    // compare_exchange umjesto load+store: dva brza pritiska hotkeya inače prođu oba.
+    if CAPTURE_BUSY
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
+
+    let app = app.clone();
+    let spawned = std::thread::Builder::new()
+        .name("rvge-capture".into())
+        .spawn(move || {
+            let result = logging::guard("region capture", || region_capture_blocking(&app, mode));
+            CAPTURE_BUSY.store(false, Ordering::SeqCst);
+            if let Err(e) = result {
+                let _ = app.emit("rvge:toast", format!("Capture nije uspio: {e}"));
+            }
+        });
+
+    if spawned.is_err() {
+        CAPTURE_BUSY.store(false, Ordering::SeqCst);
+        log("ne mogu pokrenuti capture dretvu");
+    }
+}
+
+/// Zamrzni monitor POD MIŠEM: spremi frame na disk i javi overlayu putanju
+/// (asset protokol = brzo, bez 14 MB IPC prijenosa).
+fn region_capture_blocking(app: &AppHandle, mode: CaptureMode) -> Result<(), String> {
     let (cx, cy) = cursor_pos();
     let t = std::time::Instant::now();
-    let (info, img) = capture::capture_at(cx, cy).map_err(estr)?;
-
-    // Spremi PNG na disk; overlay ga učita preko asset protokola — puno brže od 14MB IPC prijenosa.
-    let png = capture::encode_png_fast(&img).map_err(estr)?;
-    let dir = app.path().app_data_dir().map_err(estr)?;
-    std::fs::create_dir_all(&dir).map_err(estr)?;
-    let path = dir.join("frozen.png");
-    std::fs::write(&path, &png).map_err(estr)?;
     let token = Utc::now().timestamp_millis();
 
-    ensure_overlay(&app)?;
+    // Record mode ne zamrzava ekran: overlay je proziran i pokazuje živi desktop,
+    // pa preskačemo capture + PNG + disk + učitavanje (~300 ms) — odabir je instant.
+    let (info, path, png_kb) = if mode == CaptureMode::Record {
+        let info = capture::monitor_at(cx, cy).map_err(estr)?;
+        lock(&app.state::<AppState>().frozen).clear();
+        (info, String::new(), 0)
+    } else {
+        let (info, img) = capture::capture_at(cx, cy).map_err(estr)?;
+        let png = capture::encode_png_fast(&img).map_err(estr)?;
+        let dir = app.path().app_data_dir().map_err(estr)?;
+        fs::create_dir_all(&dir).map_err(estr)?;
+        let path = dir.join("frozen.png");
+        fs::write(&path, &png).map_err(estr)?;
+
+        // Frame ide i u memoriju: `finish_region_capture` tako radi bez ponovnog čitanja diska.
+        let state = app.state::<AppState>();
+        let mut frozen = lock(&state.frozen);
+        frozen.clear();
+        frozen.frames.insert(info.id, img);
+        (info, path.to_string_lossy().into_owned(), png.len() / 1024)
+    };
+
+    ensure_overlay(app)?;
     if let Some(win) = app.get_webview_window("overlay") {
         // Pozicioniraj točno preko aktivnog monitora u FIZIČKIM px (ispravno na HiDPI).
         let _ = win.set_position(PhysicalPosition::new(info.x, info.y));
@@ -182,29 +466,36 @@ pub fn begin_region_capture(app: AppHandle) -> Result<(), String> {
         let _ = win.emit(
             "rvge:capture",
             CapturePayload {
-                path: path.to_string_lossy().into_owned(),
+                path,
                 token,
                 id: info.id,
+                mode: mode.as_str(),
+                x: info.x,
+                y: info.y,
+                width: info.width,
+                height: info.height,
             },
         );
     }
-    println!(
-        "[rvge] capture {}x{} za {:?}, png {} KB",
+    log(&format!(
+        "capture {}x{} za {:?}, png {} KB, mode {}",
         info.width,
         info.height,
         t.elapsed(),
-        png.len() / 1024
-    );
+        png_kb,
+        mode.as_str()
+    ));
     Ok(())
 }
 
 /// Vrati zamrznuti frame monitora kao PNG data-URL (za prikaz u overlayu).
 #[tauri::command]
 pub fn get_frozen_frame(state: State<AppState>, monitor_id: u32) -> Result<String, String> {
-    let frozen = state.frozen.lock().map_err(estr)?;
+    let frozen = lock(&state.frozen);
     let frame = frozen
         .frames
         .get(&monitor_id)
+        .or_else(|| frozen.frames.values().next())
         .ok_or_else(|| format!("no frozen frame for monitor {monitor_id}"))?;
     capture::to_png_data_url(frame).map_err(estr)
 }
@@ -213,10 +504,7 @@ pub fn get_frozen_frame(state: State<AppState>, monitor_id: u32) -> Result<Strin
 /// Binarni IPC bez PNG/base64 → overlay se pojavi gotovo instantno (ključno za brzinu).
 #[tauri::command]
 pub fn get_frozen_rgba(state: State<AppState>, monitor_id: u32) -> Response {
-    let frozen = match state.frozen.lock() {
-        Ok(f) => f,
-        Err(_) => return Response::new(Vec::new()),
-    };
+    let frozen = lock(&state.frozen);
     // Jedan frame u igri — uzmi po id-u, ili prvi dostupni (robusno na nepodudaranje id-a).
     let Some(frame) = frozen
         .frames
@@ -244,16 +532,17 @@ pub fn finish_region_capture(
     quality: u8,
 ) -> Result<Option<Screenshot>, String> {
     let cropped = {
-        let frozen = state.frozen.lock().map_err(estr)?;
+        let frozen = lock(&state.frozen);
         let frame = frozen
             .frames
             .get(&region.monitor_id)
+            .or_else(|| frozen.frames.values().next())
             .ok_or("frozen frame missing")?;
         capture::crop(frame, &region)
     };
 
     hide_overlays(&app);
-    state.frozen.lock().map_err(estr)?.clear();
+    lock(&state.frozen).clear();
 
     match action {
         CaptureAction::Copy => {
@@ -276,24 +565,53 @@ pub fn finish_region_capture(
     }
 }
 
-/// Odustani od capture-a: zatvori overlaye, oslobodi frozen frameove.
+/// Odustani od capture-a: sakrij overlay, oslobodi frozen frameove.
 #[tauri::command]
 pub fn cancel_capture(app: AppHandle, state: State<AppState>) -> Result<(), String> {
     hide_overlays(&app);
-    state.frozen.lock().map_err(estr)?.clear();
+    lock(&state.frozen).clear();
     Ok(())
 }
 
 /// Capture cijelog primarnog ekrana → spremi u galeriju.
 #[tauri::command]
-pub fn capture_fullscreen(
+pub async fn capture_fullscreen(
     app: AppHandle,
-    state: State<AppState>,
     format: ImageFormat,
     quality: u8,
 ) -> Result<Screenshot, String> {
-    let img = capture::capture_primary().map_err(estr)?;
-    save_to_gallery(&app, &state, &img, CaptureSource::Fullscreen, format, quality)
+    let handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        logging::guard("capture_fullscreen", || {
+            let img = capture::capture_primary().map_err(estr)?;
+            let state = handle.state::<AppState>();
+            save_to_gallery(&handle, &state, &img, CaptureSource::Fullscreen, format, quality)
+        })
+    })
+    .await
+    .map_err(|e| format!("capture task: {e}"))?
+}
+
+/// Tray put za full-screen capture — na radnoj dretvi, bez blokiranja menija.
+pub fn dispatch_capture_fullscreen(app: &AppHandle, format: ImageFormat, quality: u8) {
+    let app = app.clone();
+    let _ = std::thread::Builder::new()
+        .name("rvge-capture-full".into())
+        .spawn(move || {
+            let res = logging::guard("capture_fullscreen", || {
+                let img = capture::capture_primary().map_err(estr)?;
+                let state = app.state::<AppState>();
+                save_to_gallery(&app, &state, &img, CaptureSource::Fullscreen, format, quality)
+            });
+            match res {
+                Ok(shot) => {
+                    let _ = app.emit("rvge:shot-saved", shot);
+                }
+                Err(e) => {
+                    let _ = app.emit("rvge:toast", format!("Capture nije uspio: {e}"));
+                }
+            }
+        });
 }
 
 /// Capture aktivnog prozora — TODO (F1-10): xcap::Window + fokusirani prozor.
@@ -331,7 +649,7 @@ pub fn save_image_as(
         .map_err(estr)?;
     let img = image::load_from_memory(&bytes).map_err(estr)?.to_rgba8();
     let out = capture::encode(&img, format, quality).map_err(estr)?;
-    std::fs::write(&path, out).map_err(estr)?;
+    fs::write(&path, out).map_err(estr)?;
     Ok(())
 }
 
@@ -345,23 +663,323 @@ pub fn copy_base64_to_clipboard(app: AppHandle, base64_png: String) -> Result<()
     copy_rgba_to_clipboard(&app, &img)
 }
 
+// ─────────────────────────── snimanje ekrana ───────────────────────────
+
+/// Pokreni snimanje. `region` je u koordinatama monitora (fizički px); bez njega
+/// snima se cijeli monitor pod mišem.
+/// Async jer `record::start` čeka da radna dretva otvori DXGI + Media Foundation.
+/// Na glavnoj dretvi bi to zamrznulo UI na par stotina milisekundi.
+#[tauri::command]
+pub async fn start_recording(
+    app: AppHandle,
+    region: Option<Region>,
+    monitor_id: Option<u32>,
+    options: Option<RecordOptions>,
+) -> Result<RecordStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let opts = options.unwrap_or_else(|| record_options(&app));
+        start_recording_inner(&app, region, monitor_id, opts)
+    })
+    .await
+    .map_err(|e| format!("start_recording task: {e}"))?
+}
+
+fn start_recording_inner(
+    app: &AppHandle,
+    region: Option<Region>,
+    monitor_id: Option<u32>,
+    opts: RecordOptions,
+) -> Result<RecordStatus, String> {
+    let target = resolve_target(app, region, monitor_id)?;
+    let (ox, oy, ow, oh) = record::crop_rect(&target)?;
+
+    // Overlay se sklanja TEK nakon uspješnog starta — ako DXGI ili enkoder padnu,
+    // korisnik grešku vidi u overlayu koji je još pred njim. Overlay je ionako
+    // izuzet iz capture-a (`exclude_from_capture`), pa ne može upasti u snimku.
+    let status = record::start(app, target, opts)?;
+    hide_overlays(app);
+    lock(&app.state::<AppState>().frozen).clear();
+
+    // Okvir ide prvi (najniže), pa sloj za crtanje, pa HUD — HUD mora ostati na vrhu.
+    if let Err(e) = show_rec_frame(app, &target, (ox, oy, ow, oh)) {
+        log(&format!("okvir snimanja se nije otvorio: {e} — snimanje ipak radi"));
+    }
+    if let Err(e) = show_rec_draw(app, &target, (ox, oy, ow, oh)) {
+        log(&format!("sloj za crtanje se nije otvorio: {e} — snimanje ipak radi"));
+    }
+
+    // HUD je udobnost, ne uvjet. Snimanje već teče — ako se traka ne da otvoriti
+    // (npr. transparentni prozor nije podržan), stat ćemo hotkeyem ili preko traya.
+    if let Err(e) = show_rec_hud(app, &target) {
+        log(&format!("HUD snimanja se nije otvorio: {e} — snimanje ipak radi"));
+        let _ = app.emit(
+            "rvge:toast",
+            "Recording started (controls unavailable — press the hotkey again to stop)",
+        );
+    }
+    Ok(status)
+}
+
+/// Opcije snimanja iz Settings store-a; svaka greška → razumni default.
+fn record_options(app: &AppHandle) -> RecordOptions {
+    let mut o = RecordOptions::default();
+    let Ok(store) = app.store("settings.json") else {
+        return o;
+    };
+    if let Some(v) = store.get("recordFps").and_then(|v| v.as_u64()) {
+        o.fps = (v as u32).clamp(5, 60);
+    }
+    if let Some(v) = store.get("recordQuality").and_then(|v| v.as_u64()) {
+        o.quality = v.clamp(1, 100) as u8;
+    }
+    if let Some(v) = store.get("recordCursor").and_then(|v| v.as_bool()) {
+        o.capture_cursor = v;
+    }
+    if let Some(v) = store.get("recordMaxSeconds").and_then(|v| v.as_u64()) {
+        o.max_seconds = v.min(4 * 3600) as u32;
+    }
+    if let Some(v) = store.get("recordMic").and_then(|v| v.as_bool()) {
+        o.mic = v;
+    }
+    if let Some(v) = store.get("recordSystemAudio").and_then(|v| v.as_bool()) {
+        o.system_audio = v;
+    }
+    if let Some(v) = store.get("recordFormat").and_then(|v| v.as_str().map(str::to_owned)) {
+        o.format = match v.as_str() {
+            "gif" => crate::models::RecordFormat::Gif,
+            _ => crate::models::RecordFormat::default(),
+        };
+    }
+    o
+}
+
+/// Hotkey put: ako se snima — stani; inače otvori odabir područja u record modu.
+pub fn dispatch_quick_record(app: &AppHandle) {
+    let app = app.clone();
+    let _ = std::thread::Builder::new()
+        .name("rvge-rec-start".into())
+        .spawn(move || {
+            if let Some(age) = record::age(&app) {
+                // Isti hotkey je i "stop" — ali drugi pritisak unutar 1.5 s od starta je
+                // gotovo uvijek nestrpljivo ponavljanje, ne namjera. Ignoriraj ga.
+                if age < std::time::Duration::from_millis(1500) {
+                    log("hotkey: snimanje je tek krenulo, ignoriram stop");
+                    return;
+                }
+                let _ = record::stop(&app);
+                return;
+            }
+            dispatch_region_capture(&app, CaptureMode::Record);
+        });
+}
+
+/// Tray put: odmah snimaj cijeli monitor pod mišem, bez odabira područja.
+pub fn dispatch_record_fullscreen(app: &AppHandle) {
+    let app = app.clone();
+    let _ = std::thread::Builder::new()
+        .name("rvge-rec-full".into())
+        .spawn(move || {
+            if record::is_active(&app) {
+                let _ = record::stop(&app);
+                return;
+            }
+            let opts = record_options(&app);
+            if let Err(e) = start_recording_inner(&app, None, None, opts) {
+                let _ = app.emit("rvge:toast", format!("Snimanje nije krenulo: {e}"));
+                log(&format!("dispatch_record_fullscreen: {e}"));
+            }
+        });
+}
+
+#[tauri::command]
+pub fn stop_recording(app: AppHandle) -> Result<(), String> {
+    record::stop(&app)
+}
+
+#[tauri::command]
+pub fn cancel_recording(app: AppHandle) -> Result<(), String> {
+    record::cancel(&app)
+}
+
+#[tauri::command]
+pub fn pause_recording(app: AppHandle, paused: bool) -> Result<RecordStatus, String> {
+    record::set_paused(&app, paused)
+}
+
+#[tauri::command]
+pub fn recording_status(app: AppHandle) -> RecordStatus {
+    record::status(&app)
+}
+
+/// Odredi monitor za snimanje: eksplicitni id, inače onaj pod mišem.
+fn resolve_target(
+    app: &AppHandle,
+    region: Option<Region>,
+    monitor_id: Option<u32>,
+) -> Result<RecordTarget, String> {
+    let _ = app;
+    let monitors = capture::list_monitors().map_err(estr)?;
+    let wanted = monitor_id.or_else(|| region.map(|r| r.monitor_id));
+
+    let m = wanted
+        .and_then(|id| monitors.iter().find(|m| m.id == id))
+        .or_else(|| {
+            let (cx, cy) = cursor_pos();
+            monitors.iter().find(|m| {
+                cx >= m.x && cx < m.x + m.width as i32 && cy >= m.y && cy < m.y + m.height as i32
+            })
+        })
+        .or_else(|| monitors.iter().find(|m| m.is_primary))
+        .or_else(|| monitors.first())
+        .ok_or("nema dostupnog monitora")?;
+
+    Ok(RecordTarget {
+        monitor_id: m.id,
+        monitor_x: m.x,
+        monitor_y: m.y,
+        monitor_w: m.width,
+        monitor_h: m.height,
+        region,
+    })
+}
+
+/// Mala uvijek-na-vrhu traka s tajmerom i kontrolama, na dnu snimanog monitora.
+fn show_rec_hud(app: &AppHandle, target: &RecordTarget) -> Result<(), String> {
+    ensure_rec_windows(app)?;
+    let win = app
+        .get_webview_window("recbar")
+        .ok_or("HUD prozor nedostaje")?;
+
+    // Dno-centar snimanog monitora, malo iznad ruba.
+    let x = target.monitor_x + (target.monitor_w as i32 - REC_HUD_W as i32) / 2;
+    let y = target.monitor_y + target.monitor_h as i32 - REC_HUD_H as i32 - 48;
+    let _ = win.set_position(PhysicalPosition::new(x, y));
+    let _ = win.show();
+    raise_topmost(&win);
+    Ok(())
+}
+
+/// Prozirni sloj za crtanje, točno preko snimanog područja.
+///
+/// Za razliku od HUD-a, ovaj prozor NAMJERNO nije izuzet iz capture-a: DXGI hvata
+/// kompozitirani desktop, pa sve nacrtano završi u videu bez ijedne linije koda za
+/// kompozitiranje u Rustu — isti canvas renderer kao kod screenshota.
+fn show_rec_draw(
+    app: &AppHandle,
+    target: &RecordTarget,
+    crop: (u32, u32, u32, u32),
+) -> Result<(), String> {
+    let (ox, oy, ow, oh) = crop;
+    let x = target.monitor_x + ox as i32;
+    let y = target.monitor_y + oy as i32;
+
+    ensure_rec_windows(app)?;
+    let win = app
+        .get_webview_window("recdraw")
+        .ok_or("prozor za crtanje nedostaje")?;
+    // Čist sloj za novo snimanje — anotacije prošlog ne smiju ostati.
+    let _ = win.emit("rvge:draw-clear", ());
+
+    let _ = win.set_position(PhysicalPosition::new(x, y));
+    let _ = win.set_size(PhysicalSize::new(ow, oh));
+    // Dok nije odabran alat sloj mora propuštati klikove — inače se ne može
+    // raditi ništa drugo dok snimanje traje.
+    let _ = win.set_ignore_cursor_events(true);
+    let _ = win.show();
+    Ok(())
+}
+
+/// Okvir snimanja preko CIJELOG monitora: zatamni sve oko snimanog područja i
+/// nacrta rub oko njega, pa korisnik u svakom trenutku vidi što točno ulazi u video.
+///
+/// Prozor je izuzet iz capture-a i click-through, pa ne utječe ni na snimku ni na rad.
+fn show_rec_frame(
+    app: &AppHandle,
+    target: &RecordTarget,
+    crop: (u32, u32, u32, u32),
+) -> Result<(), String> {
+    let (ox, oy, ow, oh) = crop;
+    let rect = RecFrameRect {
+        x: ox,
+        y: oy,
+        width: ow,
+        height: oh,
+        full: target.region.is_none(),
+    };
+    *lock(&app.state::<AppState>().rec_frame) = Some(rect);
+
+    ensure_rec_windows(app)?;
+    let win = app
+        .get_webview_window("recframe")
+        .ok_or("prozor okvira nedostaje")?;
+    let _ = win.set_position(PhysicalPosition::new(target.monitor_x, target.monitor_y));
+    let _ = win.set_size(PhysicalSize::new(target.monitor_w, target.monitor_h));
+    let _ = win.set_ignore_cursor_events(true);
+    // Event ide PRIJE show-a: prvi prikaz već nosi točan okvir, bez bljeska praznog sloja.
+    let _ = win.emit("rvge:rec-frame", rect);
+    let _ = win.show();
+    Ok(())
+}
+
+/// Snimano područje za okvir — prozor ga povuče pri učitavanju ako je event već prošao.
+#[tauri::command]
+pub fn rec_frame_rect(state: State<AppState>) -> Option<RecFrameRect> {
+    *lock(&state.rec_frame)
+}
+
+/// Propuštaj klikove kroz sloj za crtanje (true = sloj hvata miš).
+#[tauri::command]
+pub fn set_draw_interactive(app: AppHandle, interactive: bool) -> Result<(), String> {
+    let Some(win) = app.get_webview_window("recdraw") else {
+        return Ok(());
+    };
+    win.set_ignore_cursor_events(!interactive).map_err(estr)?;
+    if interactive {
+        let _ = win.set_focus();
+    }
+    // Fokus na sloj ga digne iznad HUD-a — vrati HUD na vrh.
+    raise_hud(&app);
+    Ok(())
+}
+
+/// Postavi redact područja koja Rust pikselizira u svakom frameu.
+#[tauri::command]
+pub fn set_blur_regions(app: AppHandle, rects: Vec<PixelRect>) -> Result<(), String> {
+    record::set_blur_regions(&app, rects)
+}
+
+/// Sakrij UI snimanja (HUD + sloj za crtanje). Zove ga frontend kad snimanje završi.
+#[tauri::command]
+pub fn close_rec_hud(app: AppHandle) -> Result<(), String> {
+    for label in ["recbar", "recdraw", "recframe"] {
+        if let Some(win) = app.get_webview_window(label) {
+            let _ = win.hide();
+        }
+    }
+    *lock(&app.state::<AppState>().rec_frame) = None;
+    // Sljedeće snimanje kreće s čistim slojem.
+    if let Some(win) = app.get_webview_window("recdraw") {
+        let _ = win.set_ignore_cursor_events(true);
+    }
+    Ok(())
+}
+
+// ──────────────────────────────── galerija ────────────────────────────────
+
 #[tauri::command]
 pub fn list_screenshots(
     state: State<AppState>,
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<Vec<Screenshot>, String> {
-    state
-        .db
-        .lock()
-        .map_err(estr)?
+    lock(&state.db)
         .list(limit.unwrap_or(200), offset.unwrap_or(0))
         .map_err(estr)
 }
 
 #[tauri::command]
 pub fn search_screenshots(state: State<AppState>, query: String) -> Result<Vec<Screenshot>, String> {
-    let db = state.db.lock().map_err(estr)?;
+    let db = lock(&state.db);
     if query.trim().is_empty() {
         db.list(200, 0).map_err(estr)
     } else {
@@ -371,14 +989,14 @@ pub fn search_screenshots(state: State<AppState>, query: String) -> Result<Vec<S
 
 #[tauri::command]
 pub fn delete_screenshot(state: State<AppState>, id: String, file_path: String) -> Result<(), String> {
-    state.db.lock().map_err(estr)?.delete(&id).map_err(estr)?;
+    lock(&state.db).delete(&id).map_err(estr)?;
     let _ = fs::remove_file(&file_path); // best-effort
     Ok(())
 }
 
 #[tauri::command]
 pub fn add_tag(state: State<AppState>, id: String, tag: String) -> Result<(), String> {
-    state.db.lock().map_err(estr)?.add_tag(&id, tag.trim()).map_err(estr)
+    lock(&state.db).add_tag(&id, tag.trim()).map_err(estr)
 }
 
 /// Otvori glavni prozor / galeriju (tray, hotkey, single-instance).
@@ -402,4 +1020,27 @@ pub fn show_home(app: AppHandle) -> Result<(), String> {
         .build()
         .map_err(estr)?;
     Ok(())
+}
+
+/// Otvori Settings prozor (tray i Home ga dijele).
+pub fn open_settings(app: &AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("index.html#settings".into()))
+        .title("RvgeShot — Settings")
+        .inner_size(880.0, 680.0)
+        .center()
+        .build()
+        .map_err(estr)?;
+    Ok(())
+}
+
+/// Putanja do log datoteke — Settings → About nudi "Open log".
+#[tauri::command]
+pub fn log_file_path() -> Option<String> {
+    logging::log_path().map(|p| p.to_string_lossy().into_owned())
 }

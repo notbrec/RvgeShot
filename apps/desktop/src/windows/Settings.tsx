@@ -2,17 +2,33 @@ import React, { useEffect, useState } from "react";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { ipc } from "../lib/ipc";
-import type { ImageFormat } from "../lib/types";
+import type { ImageFormat, RecordFormat } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 
-type Tab = "general" | "hotkeys" | "capture" | "save" | "privacy" | "about";
+type Tab =
+  | "general"
+  | "hotkeys"
+  | "capture"
+  | "recording"
+  | "save"
+  | "privacy"
+  | "about";
 
 interface AppSettings {
   theme: "dark" | "light";
   hotkey: string;
+  recordHotkey: string;
   format: ImageFormat;
   quality: number;
+  recordFormat: RecordFormat;
+  recordFps: number;
+  recordQuality: number;
+  recordCursor: boolean;
+  recordMic: boolean;
+  recordSystemAudio: boolean;
+  recordMaxSeconds: number;
   saveFolder: string;
   warnSensitive: boolean;
   stripExif: boolean;
@@ -21,8 +37,16 @@ interface AppSettings {
 const DEFAULTS: AppSettings = {
   theme: "dark",
   hotkey: "PrintScreen",
+  recordHotkey: "Ctrl+Shift+R",
   format: "png",
   quality: 92,
+  recordFormat: "mp4",
+  recordFps: 24,
+  recordQuality: 80,
+  recordCursor: true,
+  recordMic: false,
+  recordSystemAudio: false,
+  recordMaxSeconds: 1800,
   saveFolder: "Pictures/RvgeShot",
   warnSensitive: true,
   stripExif: true,
@@ -32,6 +56,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "general", label: "General" },
   { id: "hotkeys", label: "Hotkeys" },
   { id: "capture", label: "Capture" },
+  { id: "recording", label: "Recording" },
   { id: "save", label: "Save" },
   { id: "privacy", label: "Privacy" },
   { id: "about", label: "About" },
@@ -51,6 +76,14 @@ export default function Settings() {
       for (const k of Object.keys(DEFAULTS) as (keyof AppSettings)[]) {
         const v = await st.get(k);
         if (v !== undefined && v !== null) (loaded as Record<string, unknown>)[k] = v;
+      }
+      // Ako je zeljeni hotkey zauzet, jezgra registrira fallback — prikazi STVARNO stanje.
+      try {
+        const [capture, record] = await ipc.activeHotkeys();
+        if (capture) loaded.hotkey = prettyAccel(capture);
+        if (record) loaded.recordHotkey = prettyAccel(record);
+      } catch {
+        /* noop */
       }
       setS(loaded);
       try {
@@ -76,6 +109,8 @@ export default function Settings() {
     try {
       on ? await enable() : await disable();
       setAutostart(on);
+      // Jezgra pri svakom startu uključuje autostart osim ako je ovdje eksplicitno false.
+      void store?.set("autostart", on);
     } catch (e) {
       console.error(e);
     }
@@ -129,7 +164,7 @@ export default function Settings() {
 
         {tab === "hotkeys" && (
           <Section title="Hotkeys">
-            <Row label="Region capture">
+            <Row label="Region capture" hint="Freeze the screen and pick an area.">
               <HotkeyInput
                 value={s.hotkey}
                 onChange={async (accel) => {
@@ -142,9 +177,31 @@ export default function Settings() {
                 }}
               />
             </Row>
-            <p className="mt-3 text-xs text-muted">
-              Click the field, then press a combination. Changes apply immediately. Full-screen /
-              window capture coming in F2-18.
+            <Row
+              label="Screen recording"
+              hint="Press once to pick an area, again to stop the recording."
+            >
+              <HotkeyInput
+                value={s.recordHotkey}
+                onChange={async (accel) => {
+                  set("recordHotkey", accel);
+                  try {
+                    await ipc.updateRecordHotkey(accel);
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+              />
+            </Row>
+            <p className="mt-3 text-xs leading-relaxed text-muted">
+              Click a field, then press the combination. Changes apply immediately.
+              <br />
+              <span className="text-muted/80">
+                Note: <kbd>Fn</kbd> is handled inside the keyboard itself, so Windows never sees
+                it. It can only be part of a shortcut when the key it produces is a real key —
+                for example Fn+P sending <kbd>PrintScreen</kbd>. Pick a normal combination for
+                recording.
+              </span>
             </p>
           </Section>
         )}
@@ -174,6 +231,89 @@ export default function Settings() {
               />
             </Row>
             {s.format === "png" && <p className="text-xs text-muted">PNG is lossless — quality doesn't apply.</p>}
+          </Section>
+        )}
+
+        {tab === "recording" && (
+          <Section title="Recording">
+            <Row label="Format" hint="MP4 (H.264) plays everywhere; GIF drops straight into chat.">
+              <Segmented
+                value={s.recordFormat}
+                options={[
+                  { v: "mp4", l: "MP4" },
+                  { v: "gif", l: "GIF" },
+                ]}
+                onChange={(v) => set("recordFormat", v as RecordFormat)}
+              />
+            </Row>
+            <Row label="Frame rate" hint="Higher is smoother; 24 is plenty for UI walkthroughs.">
+              <Segmented
+                value={String(s.recordFps)}
+                options={[
+                  { v: "15", l: "15" },
+                  { v: "24", l: "24" },
+                  { v: "30", l: "30" },
+                  { v: "60", l: "60" },
+                ]}
+                onChange={(v) => set("recordFps", Number(v))}
+              />
+            </Row>
+            <Row label={`Quality (${s.recordQuality})`} hint="Drives the video bitrate.">
+              <input
+                type="range"
+                min={30}
+                max={100}
+                value={s.recordQuality}
+                disabled={s.recordFormat === "gif"}
+                onChange={(e) => set("recordQuality", +e.target.value)}
+                className="w-48"
+              />
+            </Row>
+            <Row label="Include the mouse cursor">
+              <Toggle
+                checked={s.recordCursor}
+                onChange={(v) => set("recordCursor", v)}
+              />
+            </Row>
+            <Row
+              label="Record microphone"
+              hint="Default input device. You can also flip this per recording, right in the capture bar."
+            >
+              <Toggle
+                checked={s.recordMic}
+                onChange={(v) => set("recordMic", v)}
+              />
+            </Row>
+            <Row
+              label="Record system audio"
+              hint="Whatever your speakers play — app sounds, calls, music. MP4 only."
+            >
+              <Toggle
+                checked={s.recordSystemAudio}
+                onChange={(v) => set("recordSystemAudio", v)}
+              />
+            </Row>
+            <Row
+              label="Stop after"
+              hint="A safety limit so a forgotten recording cannot fill the disk."
+            >
+              <Segmented
+                value={String(s.recordMaxSeconds)}
+                options={[
+                  { v: "300", l: "5 min" },
+                  { v: "1800", l: "30 min" },
+                  { v: "7200", l: "2 h" },
+                  { v: "0", l: "Never" },
+                ]}
+                onChange={(v) => set("recordMaxSeconds", Number(v))}
+              />
+            </Row>
+            {s.recordFormat === "gif" && (
+              <p className="text-xs text-muted">
+                GIF is capped at 960px wide and 256 colours per frame — great for short clips,
+                large for long ones.
+              </p>
+            )}
           </Section>
         )}
 
@@ -213,14 +353,37 @@ export default function Settings() {
 
         {tab === "about" && (
           <Section title="About">
-            <p className="text-sm text-muted">RvgeShot · version 0.1.3</p>
-            <p className="mt-2 text-sm text-muted">Fast, private screenshot tool. Privacy built in, not bolted on.</p>
+            <p className="text-sm text-muted">RvgeShot · version 0.2.0</p>
+            <p className="mt-2 text-sm text-muted">
+              Fast, private screenshot and screen recording. Privacy built in, not bolted on.
+            </p>
+            <div className="mt-6 rounded-xl border border-border/60 p-4">
+              <div className="mb-1 text-sm font-medium">Diagnostics</div>
+              <p className="mb-3 text-xs text-muted">
+                If something crashes or a recording fails, the log has the reason.
+              </p>
+              <button
+                onClick={async () => {
+                  const path = await ipc.logFilePath();
+                  if (path) await openPath(path);
+                }}
+                className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-elevated"
+              >
+                Open log file
+              </button>
+            </div>
           </Section>
         )}
       </div>
       </div>
     </WindowFrame>
   );
+}
+
+/** "CmdOrCtrl+Shift+R" je Taurijev zapis; korisniku pokazujemo tipku koju stvarno pritišće. */
+function prettyAccel(accel: string): string {
+  const isMac = navigator.userAgent.includes("Mac");
+  return accel.replace(/CmdOrCtrl/gi, isMac ? "Cmd" : "Ctrl").replace(/Super/g, isMac ? "Cmd" : "Win");
 }
 
 // ── UI primitivci ──
@@ -274,39 +437,125 @@ function Segmented({ value, options, onChange }: { value: string; options: { v: 
     </div>
   );
 }
+/**
+ * Polje za snimanje kombinacije.
+ *
+ * Pored bindanja služi i kao dijagnostika: ako tipkovnica kombinaciju obrađuje
+ * interno (klasično za `Fn`), ovdje NE stigne nijedan event — i to korisniku
+ * eksplicitno kažemo umjesto da polje šuti.
+ */
 function HotkeyInput({ value, onChange }: { value: string; onChange: (accel: string) => void }) {
   const [capturing, setCapturing] = useState(false);
+  const [silent, setSilent] = useState(false);
+
+  // Ako 4 s nakon fokusa ništa nije stiglo, kombinacija vjerojatno ne dolazi do Windowsa.
+  useEffect(() => {
+    if (!capturing) {
+      setSilent(false);
+      return;
+    }
+    const t = setTimeout(() => setSilent(true), 4000);
+    return () => clearTimeout(t);
+  }, [capturing]);
+
   return (
-    <input
-      readOnly
-      value={capturing ? "Press a combination…" : value}
-      onFocus={() => setCapturing(true)}
-      onBlur={() => setCapturing(false)}
-      onKeyDown={(e) => {
-        e.preventDefault();
-        const accel = buildAccelerator(e);
-        if (accel) {
-          onChange(accel);
-          setCapturing(false);
-          e.currentTarget.blur();
-        }
-      }}
-      className="w-48 cursor-pointer rounded-lg border border-border bg-bg px-3 py-1.5 text-center font-mono text-sm outline-none focus:border-accent"
-    />
+    <div className="flex flex-col items-end gap-1">
+      <input
+        readOnly
+        value={capturing ? "Press a combination…" : value}
+        onFocus={() => setCapturing(true)}
+        onBlur={() => setCapturing(false)}
+        onKeyDown={(e) => {
+          e.preventDefault();
+          setSilent(false);
+          const accel = buildAccelerator(e);
+          if (accel) {
+            onChange(accel);
+            setCapturing(false);
+            e.currentTarget.blur();
+          }
+        }}
+        className="w-52 cursor-pointer rounded-lg border border-border bg-bg px-3 py-1.5 text-center font-mono text-sm outline-none focus:border-accent"
+      />
+      {silent && (
+        <span className="max-w-52 text-right text-[11px] leading-snug text-warn">
+          Nothing arrived. Your keyboard is handling that combination itself — Windows never
+          sees it, so no app can bind it.
+        </span>
+      )}
+    </div>
   );
 }
 
+/**
+ * KeyboardEvent → Tauri accelerator.
+ *
+ * Koristi `e.code` (fizička tipka) gdje god može: `e.key` ovisi o rasporedu i o
+ * modifikatorima (Shift+2 daje `"`, AltGr mijenja slovo), a globalni hotkey se
+ * registrira po fizičkoj tipki. Pokriva i F13–F24 te medijske tipke jer upravo
+ * njih Fn-sloj na mnogim tipkovnicama šalje umjesto ničega.
+ */
 function buildAccelerator(e: React.KeyboardEvent): string | null {
+  if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return null;
+
   const mods: string[] = [];
   if (e.ctrlKey) mods.push("Ctrl");
   if (e.shiftKey) mods.push("Shift");
   if (e.altKey) mods.push("Alt");
   if (e.metaKey) mods.push("Super");
-  const k = e.key;
-  if (["Control", "Shift", "Alt", "Meta"].includes(k)) return null;
-  let key = k;
-  if (k === " ") key = "Space";
-  else if (k.length === 1) key = k.toUpperCase();
-  else if (k.startsWith("Arrow")) key = k.slice(5);
+
+  const key = keyFromEvent(e);
+  if (!key) return null;
   return [...mods, key].join("+");
+}
+
+function keyFromEvent(e: React.KeyboardEvent): string | null {
+  const code = e.code;
+
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  if (/^Numpad[0-9]$/.test(code)) return `Num${code.slice(6)}`;
+  if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) return code;
+
+  const byCode: Record<string, string> = {
+    Space: "Space",
+    Enter: "Enter",
+    NumpadEnter: "Enter",
+    Tab: "Tab",
+    Backspace: "Backspace",
+    Delete: "Delete",
+    Insert: "Insert",
+    Home: "Home",
+    End: "End",
+    PageUp: "PageUp",
+    PageDown: "PageDown",
+    ArrowUp: "Up",
+    ArrowDown: "Down",
+    ArrowLeft: "Left",
+    ArrowRight: "Right",
+    PrintScreen: "PrintScreen",
+    ScrollLock: "ScrollLock",
+    Pause: "Pause",
+    Minus: "-",
+    Equal: "=",
+    BracketLeft: "[",
+    BracketRight: "]",
+    Backslash: "\\",
+    Semicolon: ";",
+    Quote: "'",
+    Comma: ",",
+    Period: ".",
+    Slash: "/",
+    Backquote: "`",
+  };
+  if (byCode[code]) return byCode[code];
+
+  // Medijske / preglednik tipke nemaju koristan `code` — tu je `key` jedini izvor.
+  const k = e.key;
+  if (k.startsWith("Media") || k.startsWith("Audio") || k.startsWith("Browser")) return k;
+  if (k.length === 1) return k.toUpperCase();
+  if (k.startsWith("Arrow")) return k.slice(5);
+  if (k === " ") return "Space";
+  if (k === "Unidentified" || k === "Dead") return null;
+  return k;
 }

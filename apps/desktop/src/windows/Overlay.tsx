@@ -18,14 +18,26 @@ import {
   Save,
   Upload,
   X,
+  Monitor as MonitorIcon,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
+import { load as loadStore } from "@tauri-apps/plugin-store";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ipc } from "../lib/ipc";
 import { renderAnnotations } from "../lib/canvas";
-import type { Annotation, AnnotationTool, EditorTool, Point } from "../lib/types";
+import type {
+  Annotation,
+  AnnotationTool,
+  CapturePayload,
+  EditorTool,
+  Point,
+} from "../lib/types";
 
 interface Rect {
   x: number;
@@ -64,6 +76,14 @@ const cursorFor = (d: Dir) =>
 export default function Overlay() {
   const [imgReady, setImgReady] = useState(false);
   const [phase, setPhase] = useState<"select" | "edit">("select");
+  /** "shot" = snimka zaslona s anotacijama, "record" = odabir područja za video. */
+  const [mode, setMode] = useState<"shot" | "record">("shot");
+  const [monId, setMonId] = useState(0);
+  const [starting, setStarting] = useState(false);
+  // Zvuk se bira po snimci, a izbor se pamti u settings.json (isti ključevi kao u Settings).
+  const [mic, setMic] = useState(false);
+  const [sysAudio, setSysAudio] = useState(false);
+  const [gifFormat, setGifFormat] = useState(false);
   const [sel, setSel] = useState<Rect | null>(null);
   const [cursor, setCursor] = useState({ x: 0, y: 0 });
 
@@ -90,6 +110,8 @@ export default function Overlay() {
   const prevTool = useRef<EditorTool>("arrow");
   const barRef = useRef<HTMLDivElement>(null);
   const [barW, setBarW] = useState(640);
+  /** Fizički px po CSS px — u record modu nema zamrznutog canvasa iz kojeg bi se izveo omjer. */
+  const scaleRef = useRef(1);
 
   const ratio = () =>
     frozenRef.current && frozenRef.current.width ? frozenRef.current.width / window.innerWidth : 1;
@@ -119,7 +141,10 @@ export default function Overlay() {
 
   // Event iz Rusta: novi capture (payload = monitor id) → reset + povuci svjež frame.
   useEffect(() => {
-    const un = listen<{ path: string; token: number; id: number }>("rvge:capture", async (e) => {
+    const un = listen<CapturePayload>("rvge:capture", async (e) => {
+      setMode(e.payload.mode === "record" ? "record" : "shot");
+      setMonId(e.payload.id);
+      setStarting(false);
       setPhase("select");
       setSel(null);
       setAnnotations([]);
@@ -132,9 +157,31 @@ export default function Overlay() {
       drawing.current = false;
       dragOp.current = null;
       setImgReady(false);
-      await loadFrozen(e.payload.path, e.payload.token);
-      // tek SAD pokaži prozor (slika je učitana) → nema crnog bljeska
       const w = getCurrentWindow();
+      scaleRef.current = await w.scaleFactor().catch(() => 1);
+
+      if (e.payload.mode === "record") {
+        // Record mode ne zamrzava ekran: prozor je proziran, ispod je živi desktop,
+        // pa nema ni screenshota ni učitavanja — overlay se pojavi odmah.
+        document.body.classList.add("rec-live");
+        void loadStore("settings.json", { autoSave: true, defaults: {} })
+          .then(async (st) => {
+            setMic((await st.get<boolean>("recordMic")) ?? false);
+            setSysAudio((await st.get<boolean>("recordSystemAudio")) ?? false);
+            setGifFormat(((await st.get<string>("recordFormat")) ?? "mp4") === "gif");
+          })
+          .catch(() => undefined);
+        const c = frozenRef.current;
+        if (c) {
+          c.width = 1;
+          c.height = 1;
+        }
+        frozenCtxRef.current = null;
+      } else {
+        document.body.classList.remove("rec-live");
+        await loadFrozen(e.payload.path, e.payload.token);
+      }
+      // tek SAD pokaži prozor (slika je učitana) → nema crnog bljeska
       await w.show();
       await w.setAlwaysOnTop(true);
       await w.setFocus();
@@ -161,8 +208,14 @@ export default function Overlay() {
     const r = ratio();
     const px = Math.max(0, Math.min(Math.round(ax * r), c.width - 1));
     const py = Math.max(0, Math.min(Math.round(ay * r), c.height - 1));
-    const d = ctx.getImageData(px, py, 1, 1).data;
-    return "#" + [d[0], d[1], d[2]].map((v) => v.toString(16).padStart(2, "0")).join("");
+    try {
+      const d = ctx.getImageData(px, py, 1, 1).data;
+      return "#" + [d[0], d[1], d[2]].map((v) => v.toString(16).padStart(2, "0")).join("");
+    } catch {
+      // Tainted canvas (asset protokol bez CORS-a) — bez ovoga bi throw iz rendera
+      // srušio cijeli overlay u bijeli ekran.
+      return "#000000";
+    }
   };
 
   // ── redraw anotacija (apsolutne CSS koordinate) ──
@@ -183,11 +236,12 @@ export default function Overlay() {
   }, [annotations, sel]);
 
   useEffect(() => {
-    if (phase === "edit") redraw();
-  }, [phase, annotations, sel, redraw]);
+    if (phase === "edit" && mode === "shot") redraw();
+  }, [phase, mode, annotations, sel, redraw]);
 
   // ── loupe ──
-  const loupeVisible = phase === "select" || (phase === "edit" && tool === "eyedropper");
+  const loupeVisible =
+    mode === "shot" && (phase === "select" || (phase === "edit" && tool === "eyedropper"));
   useEffect(() => {
     if (!loupeVisible || !imgReady) return;
     const c = loupeRef.current;
@@ -261,6 +315,13 @@ export default function Overlay() {
         if (textEdit) { setTextEdit(null); setTextValue(""); }
         else void ipc.cancelCapture();
         return;
+      }
+      if (mode === "record") {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          void beginRecording(phase !== "edit" || !sel);
+        }
+        return; // u record modu nema anotacijskih prečaca
       }
       if (phase !== "edit" || textEdit) return;
       const k = e.key.toLowerCase();
@@ -378,6 +439,49 @@ export default function Overlay() {
 
   const closeSoon = () => setTimeout(() => void ipc.cancelCapture(), 650);
 
+  // ── snimanje ekrana ──
+  /** Selekcija u FIZIČKIM pikselima monitora — backend crop očekuje baš to. */
+  const selToRegion = () => {
+    if (!sel) return null;
+    const r = scaleRef.current;
+    return {
+      monitorId: monId,
+      x: Math.round(sel.x * r),
+      y: Math.round(sel.y * r),
+      width: Math.round(sel.w * r),
+      height: Math.round(sel.h * r),
+    };
+  };
+
+  const setAudio = useCallback(async (key: "recordMic" | "recordSystemAudio", v: boolean) => {
+    if (key === "recordMic") setMic(v);
+    else setSysAudio(v);
+    try {
+      const st = await loadStore("settings.json", { autoSave: true, defaults: {} });
+      await st.set(key, v);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const beginRecording = useCallback(
+    async (fullScreen: boolean) => {
+      if (starting) return;
+      setStarting(true);
+      try {
+        const region = fullScreen ? null : selToRegion();
+        await ipc.startRecording(region, monId);
+        // Backend sakriva overlay i diže HUD; ovdje nema više posla.
+      } catch (err) {
+        console.error(err);
+        setToast(String(err));
+        setStarting(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sel, monId, starting],
+  );
+
   const finish = useCallback(
     async (action: "copy" | "save") => {
       if (!sel || !frozenRef.current) return;
@@ -467,7 +571,7 @@ export default function Overlay() {
 
       {/* Dim — 4 pravokutnika oko selekcije (jeftino za prepaint, za razliku od 9999px box-shadowa) */}
       {!sel ? (
-        <div className="pointer-events-none absolute inset-0 bg-black/20" />
+        <div className={`pointer-events-none absolute inset-0 ${mode === "record" ? "bg-black/10" : "bg-black/20"}`} />
       ) : (
         <>
           <div className="pointer-events-none absolute left-0 right-0 top-0 bg-black/40" style={{ height: Math.max(0, sel.y) }} />
@@ -479,7 +583,17 @@ export default function Overlay() {
 
       {!sel && (
         <div className="lg-chip pointer-events-none absolute left-1/2 top-7 -translate-x-1/2 text-sm text-white animate-fade">
-          Drag to select &nbsp;·&nbsp; <kbd className="font-mono">Esc</kbd> to exit
+          {mode === "record" ? (
+            <>
+              Drag to select the recording area &nbsp;·&nbsp;
+              <kbd className="font-mono">Enter</kbd> full screen &nbsp;·&nbsp;
+              <kbd className="font-mono">Esc</kbd> to exit
+            </>
+          ) : (
+            <>
+              Drag to select &nbsp;·&nbsp; <kbd className="font-mono">Esc</kbd> to exit
+            </>
+          )}
         </div>
       )}
 
@@ -498,7 +612,7 @@ export default function Overlay() {
       )}
 
       {/* Annotation canvas */}
-      {sel && phase === "edit" && (
+      {sel && phase === "edit" && mode === "shot" && (
         <canvas
           ref={canvasRef}
           onMouseDown={onCanvasDown}
@@ -514,8 +628,8 @@ export default function Overlay() {
         />
       )}
 
-      {/* Move layer (kursor alat) — pomak povlačenjem unutar okvira */}
-      {sel && phase === "edit" && tool === "select" && (
+      {/* Move layer — pomak povlačenjem unutar okvira (uvijek u record modu) */}
+      {sel && phase === "edit" && (mode === "record" || tool === "select") && (
         <div
           className="absolute z-20"
           style={{ left: sel.x, top: sel.y, width: sel.w, height: sel.h, cursor: "move" }}
@@ -607,7 +721,7 @@ export default function Overlay() {
 
 
       {/* Liquid-glass toolbar — dvije grupe: alati | akcije */}
-      {sel && phase === "edit" && (
+      {sel && phase === "edit" && mode === "shot" && (
         <div ref={barRef} className="absolute z-30 flex -translate-x-1/2 items-start gap-2" style={{ left: barPos.left, top: barPos.top }} onMouseDown={(e) => e.stopPropagation()}>
           {popover === "color" && (
             <div className="lg lg-pop animate-pop left-0 w-[228px]" style={{ bottom: "calc(100% + 10px)" }}>
@@ -677,6 +791,61 @@ export default function Overlay() {
             <button title="Private upload (Phase 3)" onClick={() => setToast("Private upload coming in Phase 3")} className="lg-btn">
               <Upload size={16} />
             </button>
+            <button title="Cancel (Esc)" onClick={() => ipc.cancelCapture()} className="lg-btn">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+      {/* Record toolbar — jedina radnja je pokretanje snimanja */}
+      {sel && phase === "edit" && mode === "record" && (
+        <div
+          ref={barRef}
+          className="absolute z-30 flex -translate-x-1/2 items-center gap-2"
+          style={{ left: barPos.left, top: barPos.top }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="lg lg-bar animate-pop">
+            <button
+              title="Start recording (Enter)"
+              onClick={() => beginRecording(false)}
+              disabled={starting}
+              className="flex items-center gap-2 rounded-full bg-danger px-4 py-1.5 text-sm font-medium text-white transition hover:brightness-110 active:scale-95 disabled:opacity-50"
+            >
+              <span className="h-2.5 w-2.5 rounded-full bg-white" />
+              {starting ? "Starting…" : "Record"}
+            </button>
+            <span className="lg-sep" />
+            <button
+              title="Record the whole screen"
+              onClick={() => beginRecording(true)}
+              disabled={starting}
+              className="lg-btn"
+            >
+              <MonitorIcon size={16} />
+            </button>
+            <span className="px-1 font-mono text-[11px] text-white/70">
+              {Math.round(sel.w)}×{Math.round(sel.h)}
+            </span>
+            <span className="lg-sep" />
+            {/* zvuk: bira se po snimci; GIF nema audio pa su gumbi ugašeni */}
+            <button
+              title={gifFormat ? "GIF has no audio" : mic ? "Microphone: on" : "Microphone: off"}
+              onClick={() => void setAudio("recordMic", !mic)}
+              disabled={gifFormat}
+              className={`lg-btn ${mic && !gifFormat ? "is-active" : ""}`}
+            >
+              {mic && !gifFormat ? <Mic size={16} /> : <MicOff size={16} />}
+            </button>
+            <button
+              title={gifFormat ? "GIF has no audio" : sysAudio ? "System audio: on" : "System audio: off"}
+              onClick={() => void setAudio("recordSystemAudio", !sysAudio)}
+              disabled={gifFormat}
+              className={`lg-btn ${sysAudio && !gifFormat ? "is-active" : ""}`}
+            >
+              {sysAudio && !gifFormat ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
+            <span className="lg-sep" />
             <button title="Cancel (Esc)" onClick={() => ipc.cancelCapture()} className="lg-btn">
               <X size={16} />
             </button>

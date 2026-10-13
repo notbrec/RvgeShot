@@ -1,7 +1,7 @@
 [package]
 name = "rvgeshot"
-version = "0.1.3"
-description = "RvgeShot — brzi, privatni screenshot alat"
+version = "0.2.1"
+description = "RvgeShot — brzi, privatni screenshot i screen-recording alat"
 authors = ["RvgeShot"]
 edition = "2021"
 rust-version = "1.77"
@@ -34,6 +34,8 @@ xcap = "0.4"
 # Encode/decode + crop + blur.
 image = "0.25"
 webp = "0.3"
+# Animirani GIF izlaz za snimanje (cross-platform fallback).
+gif = "0.13"
 
 # Lokalna baza (bundled => ne treba sistemski SQLite).
 rusqlite = { version = "0.32", features = ["bundled"] }
@@ -44,9 +46,24 @@ anyhow = "1"
 thiserror = "2"
 base64 = "0.22"
 
-# Cursor pozicija (za odabir monitora pod mišem). Windows-only.
+# Windows: cursor pozicija, DXGI Desktop Duplication (snimanje) i Media Foundation (MP4/H.264).
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.60", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.60", features = [
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_Graphics_Gdi",
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Media_MediaFoundation",
+  "Win32_Media_Audio",
+  "Win32_Media_KernelStreaming",
+  "Win32_Media_Multimedia",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Variant",
+] }
 
 [features]
 # Default produkcijski profil.
@@ -57,4 +74,11 @@ opt-level = "s"   # optimiziraj za veličinu binarya (premium = mali footprint)
 lto = true
 codegen-units = 1
 strip = true
-panic = "abort"
+# NAPOMENA: NE koristi `panic = "abort"`. Uz abort svaki panic u bilo kojoj radnoj
+# dretvi (xcap, DXGI, image) trenutno ubije cijeli proces — točno "aplikacija se
+# jednostavno ugasi". S unwind panic ostaje lokalan i hvata ga `catch_unwind`.
+panic = "unwind"
+
+# Snimanje mora biti brzo i u debug buildu — inače dropa frameove.
+[profile.dev.package."*"]
+opt-level = 2

@@ -21,6 +21,7 @@ export default {
           soft: "rgb(var(--rvge-accent-soft) / <alpha-value>)",
         },
         danger: "rgb(var(--rvge-danger) / <alpha-value>)",
+        warn: "rgb(var(--rvge-warn) / <alpha-value>)",
       },
       borderRadius: {
         lg: "0.5rem",
@@ -52,9 +53,14 @@ export default {
           from: { opacity: "0", transform: "scale(0.94) translateY(6px)" },
           to: { opacity: "1", transform: "none" },
         },
+        recPulse: {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.25" },
+        },
       },
       animation: {
         pop: "pop 0.18s cubic-bezier(0.22, 1, 0.36, 1)",
+        "rec-pulse": "recPulse 1.4s ease-in-out infinite",
       },
     },
   },

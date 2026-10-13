@@ -6,6 +6,10 @@ import type {
   CaptureAction,
   ImageFormat,
   MonitorInfo,
+  PixelRect,
+  RecFrameRect,
+  RecordOptions,
+  RecordStatus,
   Region,
   Screenshot,
 } from "./types";
@@ -13,7 +17,8 @@ import type {
 export const ipc = {
   // ── capture ──
   listMonitors: () => invoke<MonitorInfo[]>("list_monitors"),
-  beginRegionCapture: () => invoke<void>("begin_region_capture"),
+  beginRegionCapture: (mode: "shot" | "record" = "shot") =>
+    invoke<void>("begin_region_capture", { mode }),
   getFrozenFrame: (monitorId: number) =>
     invoke<string>("get_frozen_frame", { monitorId }),
   getFrozenRgba: (monitorId: number) =>
@@ -33,6 +38,28 @@ export const ipc = {
   cancelCapture: () => invoke<void>("cancel_capture"),
   captureFullscreen: (format: ImageFormat, quality: number) =>
     invoke<Screenshot>("capture_fullscreen", { format, quality }),
+
+  // ── snimanje ekrana ──
+  startRecording: (
+    region: Region | null,
+    monitorId?: number,
+    options?: Partial<RecordOptions>,
+  ) =>
+    invoke<RecordStatus>("start_recording", { region, monitorId, options }),
+  stopRecording: () => invoke<void>("stop_recording"),
+  cancelRecording: () => invoke<void>("cancel_recording"),
+  pauseRecording: (paused: boolean) =>
+    invoke<RecordStatus>("pause_recording", { paused }),
+  recordingStatus: () => invoke<RecordStatus>("recording_status"),
+  closeRecHud: () => invoke<void>("close_rec_hud"),
+  /** Snimano područje za okvir (null izvan snimanja). */
+  recFrameRect: () => invoke<RecFrameRect | null>("rec_frame_rect"),
+  /** true = sloj za crtanje hvata miš; false = klikovi prolaze kroz njega. */
+  setDrawInteractive: (interactive: boolean) =>
+    invoke<void>("set_draw_interactive", { interactive }),
+  /** Redact zone koje Rust pikselizira u svakom frameu snimke. */
+  setBlurRegions: (rects: PixelRect[]) =>
+    invoke<void>("set_blur_regions", { rects }),
 
   // ── editor ──
   saveEditedImage: (base64Png: string, format: ImageFormat, quality: number) =>
@@ -55,4 +82,9 @@ export const ipc = {
   showHome: () => invoke<void>("show_home"),
   updateHotkey: (accelerator: string) =>
     invoke<void>("update_hotkey", { accelerator }),
+  updateRecordHotkey: (accelerator: string) =>
+    invoke<void>("update_record_hotkey", { accelerator }),
+  /** [capture, record] — stvarno registrirani hotkeyi (default može pasti na fallback). */
+  activeHotkeys: () => invoke<[string | null, string | null]>("active_hotkeys"),
+  logFilePath: () => invoke<string | null>("log_file_path"),
 };

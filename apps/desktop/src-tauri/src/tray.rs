@@ -4,13 +4,26 @@
 //! `app.trayIcon` u `tauri.conf.json` — Tauri v2 ne spaja dvije registracije po
 //! `id`-u, pa bi jedan proces nacrtao dvije identične ikone ("opet dva upaljena").
 
+use std::sync::OnceLock;
+
 use tauri::{
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, WebviewUrl, WebviewWindowBuilder,
+    AppHandle, Wry,
 };
 
+use crate::commands::{self, CaptureMode};
 use crate::models::ImageFormat;
+use crate::record;
+
+/// Stavke kojima mijenjamo stanje dok snimanje traje.
+struct RecordItems {
+    start: MenuItem<Wry>,
+    start_screen: MenuItem<Wry>,
+    stop: MenuItem<Wry>,
+}
+
+static RECORD_ITEMS: OnceLock<RecordItems> = OnceLock::new();
 
 pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let capture_region =
@@ -20,9 +33,23 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let capture_window =
         MenuItem::with_id(app, "capture_window", "Capture Window", true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
+
+    let record_region = MenuItem::with_id(
+        app,
+        "record_region",
+        "Record Area…",
+        true,
+        Some("CmdOrCtrl+Shift+R"),
+    )?;
+    let record_screen =
+        MenuItem::with_id(app, "record_screen", "Record This Screen", true, None::<&str>)?;
+    let record_stop =
+        MenuItem::with_id(app, "record_stop", "Stop Recording", false, None::<&str>)?;
+    let sep2 = PredefinedMenuItem::separator(app)?;
+
     let open_gallery = MenuItem::with_id(app, "open_gallery", "Gallery", true, None::<&str>)?;
     let open_settings = MenuItem::with_id(app, "open_settings", "Settings", true, None::<&str>)?;
-    let sep2 = PredefinedMenuItem::separator(app)?;
+    let sep3 = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
     let menu = Menu::with_items(
@@ -32,12 +59,22 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             &capture_full,
             &capture_window,
             &sep1,
+            &record_region,
+            &record_screen,
+            &record_stop,
+            &sep2,
             &open_gallery,
             &open_settings,
-            &sep2,
+            &sep3,
             &quit,
         ],
     )?;
+
+    let _ = RECORD_ITEMS.set(RecordItems {
+        start: record_region,
+        start_screen: record_screen,
+        stop: record_stop,
+    });
 
     let mut builder = TrayIconBuilder::with_id("rvge-tray")
         .menu(&menu)
@@ -54,29 +91,48 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Prebaci tray u "snima se" stanje (poziva se iz recordera).
+pub fn set_recording(app: &AppHandle, active: bool) {
+    if let Some(items) = RECORD_ITEMS.get() {
+        let _ = items.start.set_enabled(!active);
+        let _ = items.start_screen.set_enabled(!active);
+        let _ = items.stop.set_enabled(active);
+    }
+    if let Some(tray) = app.tray_by_id("rvge-tray") {
+        let _ = tray.set_tooltip(Some(if active {
+            "RvgeShot — snimanje u tijeku"
+        } else {
+            "RvgeShot"
+        }));
+    }
+}
+
 fn on_menu_event(app: &AppHandle, event: MenuEvent) {
     match event.id().as_ref() {
-        "capture_region" => {
-            let _ = crate::commands::begin_region_capture(app.clone());
-        }
-        "capture_full" => {
-            let _ = crate::commands::capture_fullscreen(
-                app.clone(),
-                app.state(),
-                ImageFormat::Png,
-                100,
-            );
-        }
+        "capture_region" => commands::dispatch_region_capture(app, CaptureMode::Shot),
+        "capture_full" => commands::dispatch_capture_fullscreen(app, ImageFormat::Png, 100),
         "capture_window" => {
-            let _ = crate::commands::capture_active_window();
+            let _ = commands::capture_active_window();
+        }
+        "record_region" => commands::dispatch_region_capture(app, CaptureMode::Record),
+        "record_screen" => commands::dispatch_record_fullscreen(app),
+        "record_stop" => {
+            let _ = record::stop(app);
         }
         "open_gallery" => {
-            let _ = crate::commands::show_home(app.clone());
+            let _ = commands::show_home(app.clone());
         }
         "open_settings" => {
-            let _ = open_settings(app);
+            let _ = commands::open_settings(app);
         }
-        "quit" => app.exit(0),
+        "quit" => {
+            // Snimanje u tijeku mora uredno zatvoriti datoteku prije izlaza.
+            if record::is_active(app) {
+                let _ = record::stop(app);
+                std::thread::sleep(std::time::Duration::from_millis(600));
+            }
+            app.exit(0);
+        }
         _ => {}
     }
 }
@@ -88,19 +144,6 @@ fn on_tray_event(tray: &TrayIcon, event: TrayIconEvent) {
         ..
     } = event
     {
-        let _ = crate::commands::show_home(tray.app_handle().clone());
+        let _ = commands::show_home(tray.app_handle().clone());
     }
-}
-
-fn open_settings(app: &AppHandle) -> tauri::Result<()> {
-    if let Some(win) = app.get_webview_window("settings") {
-        let _ = win.set_focus();
-        return Ok(());
-    }
-    WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("index.html#settings".into()))
-        .title("RvgeShot — Settings")
-        .inner_size(860.0, 660.0)
-        .center()
-        .build()?;
-    Ok(())
 }

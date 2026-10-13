@@ -17,6 +17,7 @@
   --rvge-accent: 10 132 255; /* Apple system blue (dark) */
   --rvge-accent-soft: 30 58 95;
   --rvge-danger: 255 69 58;
+  --rvge-warn: 255 214 10;
 }
 
 [data-theme="light"] {
@@ -29,6 +30,7 @@
   --rvge-accent: 0 122 255; /* Apple system blue */
   --rvge-accent-soft: 215 235 255;
   --rvge-danger: 255 59 48;
+  --rvge-warn: 255 179 0;
 }
 
 html,
@@ -54,6 +56,16 @@ body {
 /* Overlay je neproziran i prikazuje zamrznuti screenshot kao podlogu (robusno na Windowsu). */
 body.overlay {
   background: #000;
+}
+
+/* Record mode: overlay je proziran i pokazuje živi desktop (nema zamrznutog framea). */
+body.overlay.rec-live {
+  background: transparent;
+}
+
+/* HUD snimanja lebdi iznad desktopa — prozor je transparentan, traka nosi svoju podlogu. */
+body.hud {
+  background: transparent;
 }
 
 /* ── Liquid glass materijali ──────────────────────────────────

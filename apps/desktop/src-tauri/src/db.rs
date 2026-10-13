@@ -22,6 +22,15 @@ impl Db {
         Ok(db)
     }
 
+    /// Baza samo u memoriji — zadnja linija obrane kad se datoteka ne da otvoriti.
+    /// Povijest se tada ne pamti između pokretanja, ali capture i snimanje rade.
+    pub fn open_in_memory() -> anyhow::Result<Self> {
+        let conn = Connection::open_in_memory()?;
+        let db = Self { conn };
+        db.migrate()?;
+        Ok(db)
+    }
+
     fn migrate(&self) -> anyhow::Result<()> {
         self.conn.execute_batch(
             r#"
