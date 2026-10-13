@@ -1,69 +1,72 @@
 /* ─────────────────────────────────────────────────────────────
    RvgeShot landing — interaktivnost
 
-   ▼ DOWNLOAD LINKOVI ▼
-   Prazan string ("") => gumb pokaže „coming soon".
-   Windows je objavljen i radi odmah. macOS dolazi kad se build potvrdi —
-   tad vrati .dmg link: ".../releases/latest/download/RvgeShot.dmg".
+   Download linkovi, verzija, GA i donacije žive u config.js.
+   Gumbi s [data-os] vode na /download/?os=…&from=… (thank-you stranica):
+   ona pokrene download, pošalje GA event i ponudi donaciju.
+   `data-from` = mjesto gumba na stranici (hero / cta / footer) za GA.
    ───────────────────────────────────────────────────────────── */
-const DOWNLOADS = {
-  windows: "https://github.com/notbrec/RvgeShot/releases/latest/download/RvgeShot-Setup.msi",
-  mac: "", // coming soon
-};
-
+const CFG = window.RVGE || { version: "", downloads: {}, support: {} };
 const OS_LABEL = { windows: "Windows", mac: "macOS" };
+const track = (name, params) => window.rvgeTrack && window.rvgeTrack(name, params);
 
 /* ── detekcija operativnog sustava posjetitelja ──────────────── */
 function detectOS() {
   const p = (navigator.userAgentData?.platform || navigator.platform || "")
     .toLowerCase();
   const ua = navigator.userAgent.toLowerCase();
+  if (/iphone|ipad|ipod|android/.test(ua)) return null; // mobitel → ne nameći ništa
   if (p.includes("mac") || ua.includes("mac")) return "mac";
   if (p.includes("win") || ua.includes("win")) return "windows";
-  return null; // Linux / mobitel / nepoznato → ne nameći ništa
+  return null; // Linux / nepoznato
 }
 
 /* ── poveži download gumbe ───────────────────────────────────── */
 function wireDownloads() {
   const os = detectOS();
+  const ready = (target) => Boolean(CFG.downloads[target]);
 
   document.querySelectorAll("[data-os]").forEach((el) => {
     const target = el.dataset.os;
-    const url = DOWNLOADS[target] || "";
+    const from = el.dataset.from || "page";
 
-    if (url) {
-      el.setAttribute("href", url);
+    if (ready(target)) {
+      el.setAttribute("href", `/download/?os=${target}&from=${from}`);
     } else {
-      // build još nije objavljen → blagi feedback umjesto mrtvog linka
+      // build još nije objavljen → blagi feedback + mjerimo potražnju
       el.addEventListener("click", (e) => {
         e.preventDefault();
-        flashHint(`${OS_LABEL[target]} build coming soon 🚀`);
+        flashHint(`${OS_LABEL[target]} build is in testing — Windows is ready now 🚀`);
+        track("download_unavailable", { os: target, placement: from });
       });
     }
 
-    // istakni gumb za posjetiteljev OS
-    if (os && target === os && el.classList.contains("btn")) {
+    // istakni gumb za posjetiteljev OS — samo ako se stvarno može skinuti
+    if (os === target && ready(os) && el.classList.contains("btn")) {
       el.setAttribute("data-recommended", "");
     }
   });
 
   // stiša "drugi" gumb da preporučeni dominira
-  if (os) {
+  if (os && ready(os)) {
     document
       .querySelectorAll(`.btn[data-os]:not([data-os="${os}"])`)
-      .forEach((el) => {
-        if (el.classList.contains("btn--primary")) {
-          el.classList.replace("btn--primary", "btn--ghost");
-        }
-      });
-    document.querySelectorAll(`.btn[data-os="${os}"]`).forEach((el) => {
-      if (el.classList.contains("btn--ghost")) {
-        el.classList.replace("btn--ghost", "btn--primary");
-      }
-    });
+      .forEach((el) => el.classList.replace("btn--primary", "btn--ghost"));
+    document
+      .querySelectorAll(`.btn[data-os="${os}"]`)
+      .forEach((el) => el.classList.replace("btn--ghost", "btn--primary"));
+  }
 
-    const hint = document.getElementById("os-hint");
-    if (hint) hint.textContent = `Detected: ${OS_LABEL[os]} · 64-bit`;
+  const hint = document.getElementById("os-hint");
+  if (hint) {
+    const v = CFG.version ? `v${CFG.version} · ` : "";
+    if (os && ready(os)) {
+      hint.textContent = `Detected: ${OS_LABEL[os]} · ${v}free, no account`;
+    } else if (os === "mac") {
+      hint.textContent = "The macOS build is in testing — Windows 10/11 is ready now.";
+    } else {
+      hint.textContent = `${v}Windows 10/11, 64-bit · free, no account`;
+    }
   }
 }
 
@@ -77,6 +80,14 @@ function flashHint(msg) {
   hintTimer = setTimeout(() => {
     hint.style.color = "";
   }, 2600);
+}
+
+/* ── link „Support RvgeShot" samo ako postoji ijedan link za donaciju ── */
+function wireSupport() {
+  const any = Object.values(CFG.support || {}).some(Boolean);
+  document.querySelectorAll("[data-support-link]").forEach((el) => {
+    el.hidden = !any;
+  });
 }
 
 /* ── reveal na scroll ────────────────────────────────────────── */
@@ -112,19 +123,32 @@ function wireNav() {
 /* ── mobilni "Soon" gumbi ────────────────────────────────────── */
 function wireMobile() {
   const hint = document.getElementById("os-hint");
-  const say = () => {
+  const say = (store) => {
     if (hint) {
-      hint.textContent = "iOS & Android are in the works — desktop is ready now. 📱";
+      hint.textContent = "Desktop comes first; iOS & Android are further out. 📱";
       hint.style.color = "rgb(90 170 255)";
     }
+    track("download_unavailable", { os: store, placement: "cta" });
   };
   document.querySelectorAll(".store[data-soon]").forEach((el) => {
-    el.addEventListener("click", say);
+    const store = el.dataset.soon || "mobile";
+    el.addEventListener("click", () => say(store));
     el.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        say();
+        say(store);
       }
+    });
+  });
+}
+
+/* ── FAQ: koja pitanja ljudi otvaraju (signal što nije jasno) ── */
+function wireFaq() {
+  document.querySelectorAll(".faq__item").forEach((item) => {
+    item.addEventListener("toggle", () => {
+      if (!item.open) return;
+      const q = item.querySelector("summary")?.textContent.trim() || "";
+      track("faq_open", { question: q.slice(0, 100) });
     });
   });
 }
@@ -132,9 +156,11 @@ function wireMobile() {
 /* ── init ────────────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
   wireDownloads();
+  wireSupport();
   wireReveal();
   wireNav();
   wireMobile();
+  wireFaq();
   const y = document.getElementById("year");
   if (y) y.textContent = new Date().getFullYear();
 });

@@ -11,14 +11,14 @@
       content="oIu0cPQYKsPcEm2VJp9ak1QtakKKfV26DxDYulzYzn4"
     />
 
-    <title>RvgeShot — Free Print Screen &amp; Screenshot Tool for Windows &amp; Mac</title>
+    <title>RvgeShot — Free Screenshot &amp; Screen Recorder for Windows</title>
     <meta
       name="description"
-      content="Free print screen and screenshot tool for Windows and macOS. Capture any area of your screen, annotate instantly, and share via private links that expire when you want."
+      content="Free print screen, screenshot and screen recording tool for Windows. Capture any area, record it to MP4 or GIF, annotate and blur in a second. No account, no ads."
     />
     <meta
       name="keywords"
-      content="screenshot tool, print screen, screen capture, snipping tool, screenshot app, free screenshot, print screen windows, screenshot mac, screen capture tool, annotate screenshot, screenshot software"
+      content="screenshot tool, screen recorder, print screen, screen capture, snipping tool, record screen windows, screen to gif, screenshot app, free screenshot, free screen recorder, annotate screenshot"
     />
     <meta name="author" content="RvgeShot" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
@@ -31,22 +31,22 @@
     <meta property="og:locale" content="en_US" />
     <meta
       property="og:title"
-      content="RvgeShot — Free Print Screen &amp; Screenshot Tool for Windows &amp; Mac"
+      content="RvgeShot — Free Screenshot &amp; Screen Recorder for Windows"
     />
     <meta
       property="og:description"
-      content="Capture any area of your screen, annotate instantly, and share via private links that expire when you want. Free for Windows and macOS."
+      content="Capture any area of your screen, record it to MP4 or GIF, and annotate it in a second. Free for Windows — no account, no ads."
     />
     <meta property="og:image" content="https://rvgeshot.netlify.app/og.png" />
     <meta property="og:image:alt" content="RvgeShot — private screenshot tool" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="RvgeShot — Free Print Screen &amp; Screenshot Tool"
+      content="RvgeShot — Free Screenshot &amp; Screen Recorder"
     />
     <meta
       name="twitter:description"
-      content="Capture, annotate and share screenshots privately. Free for Windows and macOS."
+      content="Capture, record and annotate your screen. Free for Windows — no account, no ads."
     />
     <meta name="twitter:image" content="https://rvgeshot.netlify.app/og.png" />
 
@@ -59,18 +59,20 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "RvgeShot",
-        "operatingSystem": "Windows 10, Windows 11, macOS",
+        "operatingSystem": "Windows 10, Windows 11",
         "applicationCategory": "UtilitiesApplication",
         "url": "https://rvgeshot.netlify.app/",
-        "description": "Free print screen and screenshot tool for Windows and macOS. Capture any area of your screen, annotate instantly, and share via private links that expire when you want.",
-        "softwareVersion": "0.1.3",
+        "downloadUrl": "https://rvgeshot.netlify.app/download/",
+        "description": "Free print screen, screenshot and screen recording tool for Windows. Capture any area of your screen, record it to MP4 or GIF, annotate and blur instantly. No account, no ads.",
+        "softwareVersion": "0.2.1",
         "inLanguage": "en",
         "image": "https://rvgeshot.netlify.app/og.png",
         "featureList": [
           "Region, window and full-screen capture",
+          "Screen recording to MP4 (H.264) or GIF",
+          "Draw, highlight and blur live while recording",
           "Annotate with arrows, shapes, text, numbered steps",
           "Blur and redact sensitive info",
-          "Private sharing links with expiry and password",
           "Local searchable gallery, works offline"
         ],
         "offers": {
@@ -90,7 +92,7 @@
             "name": "Is RvgeShot free?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. RvgeShot is completely free, needs no account, and works on both Windows and macOS."
+              "text": "Yes. RvgeShot is completely free, with no account and no ads. Download it for Windows 10 or 11; a macOS build is in testing."
             }
           },
           {
@@ -103,10 +105,34 @@
           },
           {
             "@type": "Question",
+            "name": "Can RvgeShot record my screen?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Press the recording hotkey, drag out the area you want, and RvgeShot records it straight to MP4 (H.264) or GIF, with a live timer, pause, and the mouse cursor drawn in."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I draw on a screen recording while it runs?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. RvgeShot gives you the same annotation tools as on a screenshot - arrows, shapes, pen, marker, numbered steps, text and blur - drawn live over the area you are recording and baked into the video. The toolbar itself is never captured."
+            }
+          },
+          {
+            "@type": "Question",
             "name": "Does RvgeShot work on both Windows and Mac?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. RvgeShot runs on Windows 10/11 (64-bit) and on macOS 12 or newer, on both Apple Silicon and Intel."
+              "text": "RvgeShot runs on Windows 10 and 11 (64-bit) today. The macOS build for Apple Silicon and Intel is in testing and will be available on the download page as soon as it is ready."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why does Windows warn me when I install RvgeShot?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "RvgeShot is not code-signed yet, so Windows SmartScreen may show 'Windows protected your PC'. Click 'More info' and then 'Run anyway'. The installer is built automatically from the public source code on GitHub."
             }
           },
           {
@@ -114,7 +140,7 @@
             "name": "What makes RvgeShot more private than other screenshot tools?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Share links use ~128-bit entropy so nobody can guess them, you can add a password and an expiry of 1 hour, 1 day, 7 days or never, and uploads are never indexed by search engines."
+              "text": "Everything stays on your computer: the app has no account, no telemetry and works fully offline, and blur / redact is a first-class tool. Private share links with ~128-bit entropy, optional password and expiry are coming in an upcoming update and will never be indexed by search engines."
             }
           }
         ]
@@ -129,8 +155,10 @@
       rel="stylesheet"
     />
 
-    <link rel="stylesheet" href="/styles.css?v=4" />
-    <script src="/app.js?v=4" defer></script>
+    <link rel="stylesheet" href="/styles.css?v=5" />
+    <script src="/config.js?v=5" defer></script>
+    <script src="/analytics.js?v=5" defer></script>
+    <script src="/app.js?v=5" defer></script>
   </head>
 
   <body>
@@ -192,22 +220,23 @@
         <div class="hero__copy reveal">
           <span class="eyebrow">
             <span class="eyebrow__dot"></span>
-            Privacy built in, not bolted on
+            New in v0.2 &mdash; screen recording is here
           </span>
 
           <h1 class="hero__title">
-            Capture your screen in a flash.<br />
+            Shoot it. Record it.<br />
             Share it <span class="grad">privately</span>.
           </h1>
 
           <p class="hero__sub">
-            RvgeShot is a fast, lightweight screenshot tool for 2026. Hit a
-            hotkey, mark a region, annotate it in a second, and save it locally
-            or share it through a secure link that expires when you say so.
+            RvgeShot is a fast, lightweight screenshot <em>and screen recording</em>
+            tool for 2026. Hit a hotkey, mark a region, draw on it while you record,
+            and keep everything on your own machine. Private share links that expire
+            when you say so are up next.
           </p>
 
           <div class="hero__cta" id="download-buttons">
-            <a class="btn btn--primary btn--lg" data-os="windows" href="#download">
+            <a class="btn btn--primary btn--lg" data-os="windows" data-from="hero" href="/download/?os=windows&amp;from=hero">
               <svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="currentColor"
@@ -216,11 +245,11 @@
               </svg>
               <span>
                 Download for Windows
-                <small>.msi · Windows 10/11</small>
+                <small>Free · .msi · Windows 10/11</small>
               </span>
             </a>
 
-            <a class="btn btn--ghost btn--lg" data-os="mac" href="#download">
+            <a class="btn btn--ghost btn--lg btn--soon" data-os="mac" data-from="hero" href="#download">
               <svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="currentColor"
@@ -228,14 +257,15 @@
                 />
               </svg>
               <span>
-                Download for macOS
-                <small>.dmg · Apple Silicon & Intel</small>
+                macOS
+                <small>In testing · Apple Silicon &amp; Intel</small>
               </span>
+              <em class="soon-tag">Soon</em>
             </a>
           </div>
 
           <p class="hero__meta">
-            Free · no account · works 100% offline
+            Free · no account · no ads · works 100% offline
           </p>
         </div>
 
@@ -326,10 +356,10 @@
       <!-- ── trust strip ─────────────────────────────────────── -->
       <section class="container">
         <ul class="trust reveal">
-          <li><strong>~128-bit</strong> links nobody can guess</li>
-          <li><strong>noindex</strong> — never in search engines</li>
-          <li><strong>1h / 1d / 7d / never</strong> link expiry</li>
+          <li><strong>Free</strong> no account, no ads</li>
+          <li><strong>MP4 + GIF</strong> screen recording built in</li>
           <li><strong>100% offline</strong> local gallery</li>
+          <li><strong>Zero telemetry</strong> the app never phones home</li>
         </ul>
       </section>
 
@@ -358,6 +388,18 @@
 
           <article class="card reveal">
             <span class="card__icon">
+              <svg viewBox="0 0 24 24"><rect x="2" y="6" width="13" height="12" rx="2"/><path d="M15 10l6-3v10l-6-3z"/></svg>
+            </span>
+            <h3>Record your screen</h3>
+            <p>
+              The thing Windows never got right. One hotkey, drag a box,
+              record straight to <strong>MP4</strong> or <strong>GIF</strong> — with
+              pause, a live timer and the cursor drawn in. No ffmpeg, no extra app.
+            </p>
+          </article>
+
+          <article class="card reveal">
+            <span class="card__icon">
               <svg viewBox="0 0 24 24"><path d="M12 19l7-7-4-4-7 7-1 5 5-1z"/><path d="M14.5 6.5l3 3"/></svg>
             </span>
             <h3>Annotate like a pro</h3>
@@ -372,7 +414,7 @@
             <span class="card__icon">
               <svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 7.7-8 9-4.6-1.3-8-4-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg>
             </span>
-            <h3>Share privately</h3>
+            <h3>Share privately <em class="tag-soon">Coming soon</em></h3>
             <p>
               High-entropy links (~128 bits), an optional password and
               <strong>1h / 1d / 7d / never</strong> expiry. No public galleries,
@@ -386,8 +428,8 @@
             </span>
             <h3>Your local gallery</h3>
             <p>
-              Every capture is saved locally in SQLite, with search and tags.
-              Everything stays on your machine and works completely offline.
+              Every capture and recording is saved locally in SQLite, with search
+              and tags. Everything stays on your machine and works completely offline.
             </p>
           </article>
         </div>
@@ -441,25 +483,39 @@
             <span class="compare__new">primary tool in the editor</span>
           </div>
           <div class="compare__row">
+            <span class="compare__label">Screen recording</span>
+            <span class="compare__old">a separate app entirely</span>
+            <span class="compare__new"><b>built in</b> — MP4 or GIF</span>
+          </div>
+          <div class="compare__row">
+            <span class="compare__label">Draw while recording</span>
+            <span class="compare__old compare__no">no</span>
+            <span class="compare__new compare__yes">same tools as screenshots</span>
+          </div>
+          <div class="compare__row">
             <span class="compare__label">Indexed by search engines</span>
             <span class="compare__old compare__no">yes</span>
             <span class="compare__new"><b>never</b> — noindex</span>
           </div>
         </div>
+        <p class="compare__note reveal">
+          Private share links land in an upcoming update. Capture, recording,
+          annotation, blur and the local gallery ship today.
+        </p>
       </section>
 
       <!-- ── download CTA ────────────────────────────────────── -->
       <section class="section container" id="download">
         <div class="cta reveal">
           <div class="cta__glow"></div>
-          <h2 class="cta__title">Ready for faster screenshots?</h2>
+          <h2 class="cta__title">Ready to shoot and record?</h2>
           <p class="cta__sub">
             Download RvgeShot and grab your first screenshot in under a minute.
-            Free, no account.
+            Free, no account, no ads.
           </p>
 
           <div class="hero__cta hero__cta--center" id="download-buttons-2">
-            <a class="btn btn--primary btn--lg" data-os="windows" href="#download">
+            <a class="btn btn--primary btn--lg" data-os="windows" data-from="cta" href="/download/?os=windows&amp;from=cta">
               <svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="currentColor"
@@ -472,7 +528,7 @@
               </span>
             </a>
 
-            <a class="btn btn--ghost btn--lg btn--soon" data-os="mac" href="#download">
+            <a class="btn btn--ghost btn--lg btn--soon" data-os="mac" data-from="cta" href="#download">
               <svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="currentColor"
@@ -480,8 +536,8 @@
                 />
               </svg>
               <span>
-                Download for macOS
-                <small>.dmg · Apple Silicon &amp; Intel</small>
+                macOS
+                <small>In testing · Apple Silicon &amp; Intel</small>
               </span>
               <em class="soon-tag">Soon</em>
             </a>
@@ -489,14 +545,14 @@
 
           <!-- mobilne platforme — uskoro -->
           <div class="stores stores--center">
-            <a class="store store--sm" data-soon role="button" tabindex="0">
+            <a class="store store--sm" data-soon="ios" role="button" tabindex="0">
               <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="currentColor" d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7 2-1.1 2.8-2.2c.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.5-1-2.5-3.8ZM14.2 5.8c.6-.8 1.1-1.9 1-3-.9 0-2.1.6-2.8 1.4-.6.7-1.1 1.8-1 2.9 1 .1 2.1-.5 2.8-1.3Z"/>
               </svg>
-              <span><small>Download on the</small>App Store</span>
+              <span><small>Coming to the</small>App Store</span>
               <em class="store__soon">Soon</em>
             </a>
-            <a class="store store--sm" data-soon role="button" tabindex="0">
+            <a class="store store--sm" data-soon="android" role="button" tabindex="0">
               <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="currentColor" d="M3.6 2.2c-.3.2-.5.6-.5 1.1v17.4c0 .5.2.9.5 1.1l9.4-9.8L3.6 2.2Zm11 8.6 2.9-3-9.4-5.3c-.4-.2-.8-.2-1.1 0l7.6 8.3Zm0 2.4-7.6 8.3c.3.2.7.2 1.1 0l9.4-5.3-2.9-3Zm5.7-3.6-2.4-1.4-3.2 3.3 3.2 3.3 2.4-1.4c.9-.5.9-1.9 0-2.4Z"/>
               </svg>
@@ -520,8 +576,8 @@
           <details class="faq__item">
             <summary>Is RvgeShot free?</summary>
             <p>
-              Yes. RvgeShot is completely free, needs no account, and works on
-              both Windows and macOS.
+              Yes. RvgeShot is completely free, with no account and no ads.
+              Download it for Windows 10 or 11; a macOS build is in testing.
             </p>
           </details>
           <details class="faq__item">
@@ -533,18 +589,49 @@
             </p>
           </details>
           <details class="faq__item">
+            <summary>Can RvgeShot record my screen?</summary>
+            <p>
+              Yes. Press the recording hotkey, drag out the area you want, and
+              RvgeShot records it straight to <strong>MP4</strong> (H.264) or
+              <strong>GIF</strong> — with a live timer, pause, and the mouse cursor
+              drawn in. Windows never shipped a proper built-in recorder; this is it.
+            </p>
+          </details>
+          <details class="faq__item">
+            <summary>Can I draw on a recording while it runs?</summary>
+            <p>
+              Yes — the same toolset you get on a screenshot. Arrows, shapes, pen,
+              marker, numbered steps, text and blur / redact, drawn live over the
+              area you&rsquo;re recording and baked into the video. The toolbar
+              itself never shows up in the recording.
+            </p>
+          </details>
+          <details class="faq__item">
+            <summary>Why does Windows warn me when I install it?</summary>
+            <p>
+              RvgeShot isn&rsquo;t code-signed yet, so Windows SmartScreen may show
+              &ldquo;Windows protected your PC&rdquo;. Click <strong>More info
+              &rarr; Run anyway</strong>. The installer is built automatically from
+              the public source code on
+              <a class="inline-link" href="https://github.com/notbrec/RvgeShot" target="_blank" rel="noopener">GitHub</a>.
+            </p>
+          </details>
+          <details class="faq__item">
             <summary>Does RvgeShot work on both Windows and Mac?</summary>
             <p>
-              Yes. RvgeShot runs on Windows 10/11 (64-bit) and on macOS 12 or
-              newer, on both Apple Silicon and Intel.
+              RvgeShot runs on Windows 10 and 11 (64-bit) today. The macOS build
+              for Apple Silicon and Intel is in testing and goes up on the
+              download page as soon as it&rsquo;s ready.
             </p>
           </details>
           <details class="faq__item">
             <summary>What makes RvgeShot more private than other screenshot tools?</summary>
             <p>
-              Share links use ~128-bit entropy so nobody can guess them, you can
-              add a password and an expiry of 1 hour, 1 day, 7 days or never, and
-              uploads are never indexed by search engines.
+              Everything stays on your computer: no account, no telemetry, and
+              the app works fully offline, with blur / redact as a first-class
+              tool. Private share links &mdash; ~128-bit entropy, optional password,
+              expiry of 1 hour to never, never indexed by search engines &mdash;
+              arrive in an upcoming update.
             </p>
           </details>
         </div>
@@ -579,22 +666,27 @@
             <a href="#features">Features</a>
             <a href="#privacy">Privacy</a>
             <a href="#download">Download</a>
+            <a href="/download/#support" data-support-link hidden>Support RvgeShot</a>
           </div>
           <div>
             <h4>Platforms</h4>
-            <a href="#download" data-os="windows">Windows</a>
-            <a href="#download" data-os="mac">macOS</a>
+            <a href="/download/?os=windows&amp;from=footer" data-os="windows" data-from="footer">Windows</a>
+            <a href="#download" data-os="mac" data-from="footer">macOS</a>
           </div>
           <div>
             <h4>Resources</h4>
             <a href="https://github.com/notbrec/RvgeShot" target="_blank" rel="noopener">GitHub</a>
             <a href="#faq">FAQ</a>
+            <a href="/privacy/">Privacy policy</a>
           </div>
         </nav>
       </div>
       <div class="container footer__bottom">
         <span>© <span id="year">2026</span> RvgeShot</span>
-        <span>Made for 2026.</span>
+        <span>
+          <button type="button" class="linkbtn" data-consent-open hidden>Cookie settings</button>
+          Made for 2026.
+        </span>
       </div>
     </footer>
   </body>

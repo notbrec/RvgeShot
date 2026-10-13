@@ -1166,8 +1166,305 @@ kbd {
   }
 }
 
+/* ── sitnice ───────────────────────────────────────────────── */
+/* [hidden] mora pobijediti display pravila komponenti (footer linkovi, banner) */
+[hidden] {
+  display: none !important;
+}
+.inline-link,
+.cta__note a,
+.dl__tip a {
+  color: rgb(90 170 255);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.linkbtn {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-right: 14px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.linkbtn:hover,
+.footer__bottom a:hover {
+  color: rgb(var(--text));
+}
+.btn span b {
+  font-weight: inherit;
+}
+.btn__icon--line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* „Coming soon" uz naslov kartice */
+.tag-soon {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  transform: translateY(-2px);
+  color: rgb(255 159 10);
+  background: rgba(255, 159, 10, 0.14);
+}
+.compare__note {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 14px;
+  color: rgb(var(--muted));
+}
+
+/* ── /download/ stranica ───────────────────────────────────── */
+.dl {
+  padding-top: clamp(32px, 6vw, 72px);
+}
+.dl__card {
+  max-width: 820px;
+  margin-inline: auto;
+}
+.dl__badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 26px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(10, 132, 255, 0.38), rgba(122, 91, 255, 0.28));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 14px 40px rgba(10, 132, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: background 0.4s var(--ease), box-shadow 0.4s var(--ease);
+}
+.dl__ico {
+  grid-area: 1 / 1;
+  width: 32px;
+  height: 32px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.35s var(--ease), transform 0.45s var(--ease-spring);
+}
+.dl__card[data-state="ready"] .dl__ico--down,
+.dl__card[data-state="starting"] .dl__ico--down,
+.dl__card[data-state="started"] .dl__ico--ok,
+.dl__card[data-state="soon"] .dl__ico--soon {
+  opacity: 1;
+  transform: none;
+}
+.dl__card[data-state="starting"] .dl__ico--down {
+  animation: dlBounce 1s var(--ease) infinite;
+}
+@keyframes dlBounce {
+  0%, 100% { transform: translateY(-2px); }
+  50% { transform: translateY(4px); }
+}
+.dl__card[data-state="started"] .dl__badge {
+  background: linear-gradient(180deg, rgba(48, 209, 88, 0.42), rgba(10, 132, 255, 0.25));
+  box-shadow: 0 14px 40px rgba(48, 209, 88, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.dl__card[data-state="soon"] .dl__badge {
+  background: linear-gradient(180deg, rgba(255, 159, 10, 0.34), rgba(122, 91, 255, 0.22));
+  box-shadow: 0 14px 40px rgba(255, 159, 10, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+/* tanka traka dok se download „priprema" (AUTO_DELAY_MS u download.js) */
+.dl__bar {
+  position: relative;
+  display: none;
+  width: min(320px, 80%);
+  height: 4px;
+  margin: 28px auto 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+.dl__bar span {
+  position: absolute;
+  inset: 0;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: linear-gradient(90deg, rgb(var(--cyan)), rgb(var(--accent)), rgb(var(--violet)));
+}
+.dl__card[data-state="starting"] .dl__bar {
+  display: block;
+}
+.dl__card[data-state="starting"] .dl__bar span {
+  animation: dlFill 0.9s var(--ease) forwards;
+}
+@keyframes dlFill {
+  to { transform: scaleX(1); }
+}
+
+.section--tight {
+  padding-top: clamp(56px, 8vw, 96px);
+}
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.step__num {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 18px;
+  border-radius: 50%;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  background: rgb(var(--accent));
+  box-shadow: 0 6px 18px rgba(10, 132, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.step b,
+.dl__tip b {
+  color: rgb(var(--text));
+  font-weight: 600;
+}
+.dl__tip {
+  max-width: 760px;
+  margin: 28px auto 0;
+  text-align: center;
+  font-size: 14.5px;
+  color: rgb(var(--muted));
+}
+.support .cta__title {
+  font-size: clamp(26px, 3.6vw, 40px);
+}
+
+/* ── cookie banner (analytics.js) ──────────────────────────── */
+.consent {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: min(680px, calc(100% - 32px));
+  padding: 16px 18px 16px 22px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 50%),
+    rgba(30, 30, 34, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  opacity: 0;
+  transform: translate(-50%, 24px);
+  transition: opacity 0.35s var(--ease), transform 0.45s var(--ease);
+}
+.consent.is-in {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.consent__text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgb(var(--muted));
+}
+.consent__text strong {
+  color: rgb(var(--text));
+}
+.consent__text a {
+  color: rgb(90 170 255);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.consent__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+/* ── /privacy/ ─────────────────────────────────────────────── */
+.legal {
+  max-width: 760px;
+  padding-top: clamp(40px, 6vw, 72px);
+}
+.legal h1 {
+  font-size: clamp(36px, 5vw, 56px);
+}
+.legal__date {
+  margin-top: 12px;
+  font-size: 14px;
+  color: rgb(var(--muted));
+}
+.legal h2 {
+  margin: 44px 0 14px;
+  font-size: 24px;
+}
+.legal h3 {
+  margin: 26px 0 8px;
+  font-size: 17px;
+  letter-spacing: -0.015em;
+}
+.legal p,
+.legal li {
+  font-size: 16px;
+  color: rgb(var(--muted));
+}
+.legal p + p {
+  margin-top: 12px;
+}
+.legal b {
+  color: rgb(var(--text));
+}
+.legal a {
+  color: rgb(90 170 255);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.legal code {
+  font-family: "SF Mono", ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.86em;
+  padding: 0.1em 0.4em;
+  border-radius: 6px;
+  color: rgb(var(--text));
+  background: rgba(255, 255, 255, 0.08);
+  overflow-wrap: anywhere;
+}
+.legal__summary {
+  margin-top: 32px;
+  padding: 24px 28px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(10, 132, 255, 0.1), rgba(10, 132, 255, 0.03)),
+    rgba(30, 30, 34, 0.55);
+  border: 1px solid rgba(10, 132, 255, 0.3);
+}
+.legal__summary h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.legal__summary ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+}
+
 /* ── responsive ────────────────────────────────────────────── */
 @media (max-width: 900px) {
+  .steps {
+    grid-template-columns: 1fr;
+  }
   .hero {
     gap: 40px;
   }
@@ -1222,8 +1519,26 @@ kbd {
     color: rgb(var(--muted));
   }
   .compare__old::before {
-    content: "Stari: ";
+    content: "Others: ";
     opacity: 0.6;
+  }
+}
+
+@media (max-width: 600px) {
+  .consent {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    bottom: 16px;
+    padding: 16px;
+  }
+  .consent__actions .btn {
+    flex: 1;
+  }
+  .footer__bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 }
 
