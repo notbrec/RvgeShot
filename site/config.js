@@ -5,7 +5,7 @@
    ───────────────────────────────────────────────────────────── */
 window.RVGE = {
   // Prikazuje se na download stranici. Uskladi s tauri.conf.json kod releasea.
-  version: "0.2.1",
+  version: "0.2.2",
 
   // Prazan string ("") => gumb pokaže „coming soon" umjesto downloada.
   // `latest/download` uvijek vodi na zadnji objavljeni GitHub Release.

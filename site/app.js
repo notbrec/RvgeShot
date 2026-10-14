@@ -36,7 +36,7 @@ function wireDownloads() {
       // build još nije objavljen → blagi feedback + mjerimo potražnju
       el.addEventListener("click", (e) => {
         e.preventDefault();
-        flashHint(`${OS_LABEL[target]} build is in testing — Windows is ready now 🚀`);
+        flashHint(`The ${OS_LABEL[target]} build is still in testing. Windows is ready now.`);
         track("download_unavailable", { os: target, placement: from });
       });
     }
@@ -75,7 +75,7 @@ function flashHint(msg) {
   const hint = document.getElementById("os-hint");
   if (!hint) return;
   hint.textContent = msg;
-  hint.style.color = "rgb(90 170 255)";
+  hint.style.color = "#3d9bff";
   clearTimeout(hintTimer);
   hintTimer = setTimeout(() => {
     hint.style.color = "";
@@ -120,28 +120,6 @@ function wireNav() {
   window.addEventListener("scroll", onScroll, { passive: true });
 }
 
-/* ── mobilni "Soon" gumbi ────────────────────────────────────── */
-function wireMobile() {
-  const hint = document.getElementById("os-hint");
-  const say = (store) => {
-    if (hint) {
-      hint.textContent = "Desktop comes first; iOS & Android are further out. 📱";
-      hint.style.color = "rgb(90 170 255)";
-    }
-    track("download_unavailable", { os: store, placement: "cta" });
-  };
-  document.querySelectorAll(".store[data-soon]").forEach((el) => {
-    const store = el.dataset.soon || "mobile";
-    el.addEventListener("click", () => say(store));
-    el.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        say(store);
-      }
-    });
-  });
-}
-
 /* ── FAQ: koja pitanja ljudi otvaraju (signal što nije jasno) ── */
 function wireFaq() {
   document.querySelectorAll(".faq__item").forEach((item) => {
@@ -159,7 +137,6 @@ document.addEventListener("DOMContentLoaded", () => {
   wireSupport();
   wireReveal();
   wireNav();
-  wireMobile();
   wireFaq();
   const y = document.getElementById("year");
   if (y) y.textContent = new Date().getFullYear();
