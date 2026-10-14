@@ -19,6 +19,7 @@ use tauri::{
     WebviewWindowBuilder,
 };
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_store::StoreExt;
 use uuid::Uuid;
 
@@ -968,23 +969,98 @@ pub fn close_rec_hud(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn list_screenshots(
+    app: AppHandle,
     state: State<AppState>,
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<Vec<Screenshot>, String> {
-    lock(&state.db)
+    let items = lock(&state.db)
         .list(limit.unwrap_or(200), offset.unwrap_or(0))
-        .map_err(estr)
+        .map_err(estr)?;
+    allow_media_dirs(&app, &items);
+    Ok(items)
 }
 
 #[tauri::command]
-pub fn search_screenshots(state: State<AppState>, query: String) -> Result<Vec<Screenshot>, String> {
-    let db = lock(&state.db);
-    if query.trim().is_empty() {
-        db.list(200, 0).map_err(estr)
-    } else {
-        db.search(query.trim()).map_err(estr)
+pub fn search_screenshots(
+    app: AppHandle,
+    state: State<AppState>,
+    query: String,
+) -> Result<Vec<Screenshot>, String> {
+    let items = {
+        let db = lock(&state.db);
+        if query.trim().is_empty() {
+            db.list(200, 0).map_err(estr)?
+        } else {
+            db.search(query.trim()).map_err(estr)?
+        }
+    };
+    allow_media_dirs(&app, &items);
+    Ok(items)
+}
+
+/// Asset scope iz tauri.conf.json pokriva samo $HOME/$PICTURE/$APPDATA. Galerija
+/// spremljena drugdje (npr. `D:\Snimke` iz Settingsa) inače bi u pregledniku
+/// pokazala prazan okvir — pa dopustimo upravo mape u kojima su naši zapisi.
+fn allow_media_dirs(app: &AppHandle, items: &[Screenshot]) {
+    let scope = app.asset_protocol_scope();
+    for s in items {
+        let path = Path::new(&s.file_path);
+        if scope.is_allowed(path) {
+            continue;
+        }
+        if let Some(dir) = path.parent() {
+            if let Err(e) = scope.allow_directory(dir, false) {
+                log(&format!("asset scope {}: {e}", dir.display()));
+            }
+        }
     }
+}
+
+// ─────────────────────────────── preglednik ───────────────────────────────
+// Komande primaju id zapisa, ne putanju: webview tako ne može otvoriti ni
+// kopirati ništa što nije u galeriji.
+
+fn media_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+    let state = app.state::<AppState>();
+    let shot = lock(&state.db)
+        .get(id)
+        .map_err(estr)?
+        .ok_or("This item is no longer in the gallery")?;
+    let path = PathBuf::from(shot.file_path);
+    if !path.exists() {
+        return Err("The file was moved or deleted".into());
+    }
+    Ok(path)
+}
+
+/// Otvori datoteku u zadanom programu sustava (Photos, Media Player…).
+#[tauri::command]
+pub fn open_media(app: AppHandle, id: String) -> Result<(), String> {
+    let path = media_path(&app, &id)?;
+    app.opener()
+        .open_path(path.to_string_lossy(), None::<&str>)
+        .map_err(estr)
+}
+
+/// Pokaži datoteku u Exploreru (označenu).
+#[tauri::command]
+pub fn reveal_media(app: AppHandle, id: String) -> Result<(), String> {
+    let path = media_path(&app, &id)?;
+    app.opener().reveal_item_in_dir(&path).map_err(estr)
+}
+
+/// Kopiraj sliku iz galerije u clipboard. Dekodiranje velikog PNG-a traje — ne na
+/// glavnoj dretvi.
+#[tauri::command]
+pub async fn copy_media_image(app: AppHandle, id: String) -> Result<(), String> {
+    let path = media_path(&app, &id)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let img = image::open(&path).map_err(estr)?.to_rgba8();
+        copy_rgba_to_clipboard(&app, &img)
+    })
+    .await
+    .map_err(|e| format!("copy task: {e}"))?
 }
 
 #[tauri::command]

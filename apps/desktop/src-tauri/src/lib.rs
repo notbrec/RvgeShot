@@ -24,7 +24,14 @@ pub fn run() {
 
     // Neki WebView2/GPU driveri ruše borderless overlay webview (exit 0xC..., "Edge se pojavi").
     // Isključi GPU akceleraciju u WebView2 → stabilno na svim mašinama.
-    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--disable-gpu");
+    // RVGE_WEBVIEW_ARGS dodaje zastavice za dijagnostiku, npr. `--remote-debugging-port=9222`
+    // (DevTools / CDP nad release buildom) — bez njega ponašanje je nepromijenjeno.
+    let mut webview_args = String::from("--disable-gpu");
+    if let Ok(extra) = std::env::var("RVGE_WEBVIEW_ARGS") {
+        webview_args.push(' ');
+        webview_args.push_str(extra.trim());
+    }
+    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", webview_args);
 
     let app = tauri::Builder::default()
         // ── single-instance MORA biti prvi: druga instanca se ugasi (samo jedna tray ikona) ──
@@ -115,6 +122,9 @@ pub fn run() {
             commands::search_screenshots,
             commands::delete_screenshot,
             commands::add_tag,
+            commands::open_media,
+            commands::reveal_media,
+            commands::copy_media_image,
             commands::show_home,
             commands::log_file_path,
             shortcuts::update_hotkey,

@@ -78,6 +78,13 @@ export const ipc = {
     invoke<void>("delete_screenshot", { id, filePath }),
   addTag: (id: string, tag: string) => invoke<void>("add_tag", { id, tag }),
 
+  // ── preglednik (po id-u zapisa, ne po putanji) ──
+  /** Otvori u zadanom programu sustava. */
+  openMedia: (id: string) => invoke<void>("open_media", { id }),
+  /** Pokaži datoteku u Exploreru. */
+  revealMedia: (id: string) => invoke<void>("reveal_media", { id }),
+  copyMediaImage: (id: string) => invoke<void>("copy_media_image", { id }),
+
   // ── sustav ──
   showHome: () => invoke<void>("show_home"),
   updateHotkey: (accelerator: string) =>

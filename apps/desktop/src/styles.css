@@ -252,6 +252,60 @@ body.hud {
     0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
+/* ── Preglednik galerije ──────────────────────────────────────
+   Uvijek taman (konvencija za pregled medija), i kad je app u light temi. */
+.viewer {
+  --rvge-text: 245 245 247;
+  --rvge-muted: 152 152 159;
+  --rvge-accent: 10 132 255;
+  --rvge-danger: 255 69 58;
+  --rvge-warn: 255 214 10;
+  color: rgb(var(--rvge-text));
+}
+[data-theme="light"] .viewer .lg {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 40%),
+    rgba(34, 34, 38, 0.86);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 0 22px rgba(255, 255, 255, 0.06),
+    inset 0 -14px 28px rgba(0, 0, 0, 0.18);
+}
+[data-theme="light"] .viewer .lg::after {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.55),
+    rgba(255, 255, 255, 0.1) 40%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.18)
+  );
+}
+
+/* Klizač glasnoće: ispunjeni dio do --p */
+.vw-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    rgb(255 255 255 / 0.85) var(--p, 100%),
+    rgb(255 255 255 / 0.15) var(--p, 100%)
+  );
+  cursor: pointer;
+  outline: none;
+}
+.vw-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
 /* ── Pomoćne animacije ── */
 @keyframes lg-pop-in {
   0% {

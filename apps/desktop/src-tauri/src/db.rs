@@ -110,6 +110,25 @@ impl Db {
         Ok(out)
     }
 
+    /// Jedan zapis po id-u (preglednik u galeriji).
+    pub fn get(&self, id: &str) -> anyhow::Result<Option<Screenshot>> {
+        let mut stmt = self.conn.prepare(
+            r#"SELECT id, file_path, thumb_path, name, format, width, height, size_bytes,
+                      source, created_at, is_uploaded
+               FROM screenshots
+               WHERE id = ?1"#,
+        )?;
+        let mut rows = stmt.query_map(params![id], Self::map_row)?;
+        match rows.next() {
+            Some(r) => {
+                let mut s = r?;
+                s.tags = self.tags_for(&s.id)?;
+                Ok(Some(s))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Pretraga po imenu ili tagu (LIKE; FTS5 dolazi u F2-14).
     pub fn search(&self, query: &str) -> anyhow::Result<Vec<Screenshot>> {
         let like = format!("%{}%", query);

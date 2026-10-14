@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import {
   Crop,
@@ -10,7 +10,7 @@ import {
   Settings as SettingsIcon,
   Search,
   Trash2,
-  ExternalLink,
+  FolderOpen,
   ImageOff,
   Video,
   Play,
@@ -18,9 +18,10 @@ import {
 import { ipc } from "../lib/ipc";
 import { isVideo } from "../lib/types";
 import type { RecordDone, Screenshot } from "../lib/types";
+import WindowFrame from "../components/WindowFrame";
+import Viewer, { fmtBytes } from "../components/Viewer";
 
 type Filter = "all" | "images" | "videos";
-import WindowFrame from "../components/WindowFrame";
 
 export default function Home() {
   const [items, setItems] = useState<Screenshot[]>([]);
@@ -28,6 +29,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
   const [toast, setToast] = useState<string | null>(null);
+  /** Otvoren u pregledniku (id, ne indeks — lista se osvježava ispod njega). */
+  const [viewId, setViewId] = useState<string | null>(null);
 
   const load = useCallback(async (q: string) => {
     setLoading(true);
@@ -85,11 +88,29 @@ export default function Home() {
     return items.filter((s) => isVideo(s) === wantVideo);
   }, [items, filter]);
 
-  const onDelete = async (s: Screenshot) => {
-    if (!confirm(`Delete "${s.name}"?`)) return;
+  const onDelete = useCallback(async (s: Screenshot) => {
+    const what = isVideo(s) ? "recording" : "screenshot";
+    const ok = await ask(`"${s.name}" will be removed from the gallery and deleted from disk.`, {
+      title: `Delete ${what}?`,
+      kind: "warning",
+      okLabel: "Delete",
+      cancelLabel: "Cancel",
+    });
+    if (!ok) return false;
     await ipc.deleteScreenshot(s.id, s.filePath);
     setItems((prev) => prev.filter((x) => x.id !== s.id));
-  };
+    return true;
+  }, []);
+
+  const reveal = useCallback(async (s: Screenshot) => {
+    try {
+      await ipc.revealMedia(s.id);
+    } catch (e) {
+      setToast(String(e));
+    }
+  }, []);
+
+  const closeViewer = useCallback(() => setViewId(null), []);
 
   const captureRegion = async () => {
     await getCurrentWindow().hide();
@@ -168,11 +189,28 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {visible.map((s) => (
-              <Card key={s.id} shot={s} onDelete={() => onDelete(s)} />
+              <Card
+                key={s.id}
+                shot={s}
+                onOpen={() => setViewId(s.id)}
+                onReveal={() => void reveal(s)}
+                onDelete={() => void onDelete(s)}
+              />
             ))}
           </div>
         )}
       </main>
+
+      {viewId && (
+        <Viewer
+          items={visible}
+          id={viewId}
+          onNavigate={setViewId}
+          onClose={closeViewer}
+          onDelete={onDelete}
+          onToast={setToast}
+        />
+      )}
 
       {toast && (
         <div className="pointer-events-none absolute bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-elevated/95 px-4 py-2 text-sm shadow-card ring-1 ring-white/10 animate-pop">
@@ -183,12 +221,34 @@ export default function Home() {
   );
 }
 
-function Card({ shot, onDelete }: { shot: Screenshot; onDelete: () => void }) {
+function Card({
+  shot,
+  onOpen,
+  onReveal,
+  onDelete,
+}: {
+  shot: Screenshot;
+  onOpen: () => void;
+  onReveal: () => void;
+  onDelete: () => void;
+}) {
   const video = isVideo(shot);
   // MP4 se ne moze prikazati u <img>; bez thumbnaila ide placeholder.
   const src = shot.thumbPath ?? (video ? null : shot.filePath);
   return (
-    <div className="group relative overflow-hidden rounded-2xl bg-elevated/60 ring-1 ring-white/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card hover:ring-white/20">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      title={video ? "Play" : "View"}
+      className="group relative cursor-pointer overflow-hidden rounded-2xl bg-elevated/60 outline-none ring-1 ring-white/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card hover:ring-white/20 focus-visible:ring-2 focus-visible:ring-accent"
+    >
       <div className="relative aspect-video w-full bg-black/30">
         {src ? (
           <img
@@ -196,6 +256,7 @@ function Card({ shot, onDelete }: { shot: Screenshot; onDelete: () => void }) {
             alt={shot.name}
             className="h-full w-full object-cover"
             loading="lazy"
+            draggable={false}
           />
         ) : (
           <div className="grid h-full w-full place-items-center text-muted">
@@ -204,16 +265,13 @@ function Card({ shot, onDelete }: { shot: Screenshot; onDelete: () => void }) {
         )}
         {video && (
           <>
-            <button
-              onClick={() => openPath(shot.filePath)}
-              title="Play"
-              className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100"
-            >
-              <span className="grid h-11 w-11 place-items-center rounded-full bg-black/65 text-white backdrop-blur">
-                <Play size={18} fill="currentColor" />
+            <div className="pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+              <span className="grid h-11 w-11 place-items-center rounded-full bg-black/65 text-white shadow-card ring-1 ring-white/20 transition-transform duration-200 group-hover:scale-105">
+                <Play size={18} fill="currentColor" className="ml-0.5" />
               </span>
-            </button>
-            <span className="pointer-events-none absolute bottom-1.5 left-1.5 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] uppercase text-white">
+            </div>
+            <span className="pointer-events-none absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] uppercase text-white">
+              <Play size={8} fill="currentColor" />
               {shot.format}
             </span>
           </>
@@ -225,11 +283,28 @@ function Card({ shot, onDelete }: { shot: Screenshot; onDelete: () => void }) {
           {shot.width}×{shot.height} · {fmtBytes(shot.sizeBytes)}
         </div>
       </div>
-      <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <button onClick={() => openPath(shot.filePath)} title="Open" className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur transition hover:bg-black/75">
-          <ExternalLink size={15} />
+      <div
+        className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onReveal();
+          }}
+          title="Show in folder"
+          className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white transition hover:bg-black/75"
+        >
+          <FolderOpen size={15} />
         </button>
-        <button onClick={onDelete} title="Delete" className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur transition hover:bg-danger">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          title="Delete"
+          className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white transition hover:bg-danger"
+        >
           <Trash2 size={15} />
         </button>
       </div>
@@ -256,10 +331,4 @@ function EmptyState({ onCapture, hasQuery }: { onCapture: () => void; hasQuery: 
       </div>
     </div>
   );
-}
-
-function fmtBytes(n: number) {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }

@@ -92,15 +92,25 @@ hotkey ponovno pritisnut zaustavlja snimanje. Snimka završi u galeriji uz scree
 - Kursor se ucrtava u snimku (isključivo u Settings → Recording).
 - Sigurnosni limit trajanja (default 30 min) da zaboravljeno snimanje ne napuni disk.
 
+### Galerija
+
+Klik na karticu otvara ugrađeni preglednik: video (MP4) svira u appu (premotavanje, glasnoća,
+brzina, cijeli zaslon), slike i GIF-ovi imaju zoom do 800 % i pomicanje. Tipke: `←/→`
+prethodni/sljedeći, `Space`/`K` pusti, `J`/`L` ±5 s, `M` zvuk, `+`/`−`/`0`/`1` zoom,
+`Ctrl+C` kopiraj sliku, `F` cijeli zaslon, `Del` obriši, `Esc` zatvori.
+
 ### Dijagnostika
 
 Aplikacija piše log u `%APPDATA%/app.rvgeshot.desktop/logs/rvgeshot.log`
 (Settings → About → **Open log file**). Svaki panic i neuspjeh snimanja završi ondje.
 
+DevTools nad release buildom: pokreni s `RVGE_WEBVIEW_ARGS=--remote-debugging-port=9222`
+pa se spoji na `http://127.0.0.1:9222` (Chrome DevTools ili Playwright `connectOverCDP`).
+
 ## Status
 
-**v0.2.0 — desktop je upotrebljiv.** Capture regije, anotacije, lokalna galerija i snimanje
-ekrana rade end-to-end. Capture aktivnog prozora i privatni upload (Faza 3) još su `TODO`
+**v0.2.2 — desktop je upotrebljiv.** Capture regije, anotacije, lokalna galerija s
+ugrađenim playerom i snimanje ekrana rade end-to-end. Capture aktivnog prozora i privatni upload (Faza 3) još su `TODO`
 (vidi `docs/TASK-BREAKDOWN.md`).
 
 ### Testovi

@@ -1,6 +1,6 @@
 [package]
 name = "rvgeshot"
-version = "0.2.1"
+version = "0.2.2"
 description = "RvgeShot — brzi, privatni screenshot i screen-recording alat"
 authors = ["RvgeShot"]
 edition = "2021"
